@@ -2,7 +2,7 @@
 # Source verification of a deployment recorded in deployments/<chainId>.json, on MonadVision (Sourcify) and, when
 # ETHERSCAN_API_KEY is set, on Monadscan (Etherscan API v2). Constructor arguments come from the record.
 #
-#   ./script/verify.sh 10143                     # TokenFactory + LiquidityMigrator
+#   ./script/verify.sh 10143                     # TokenFactory + LiquidityMigrator + StockReserve implementation
 #   ./script/verify.sh 10143 <token>             # a launched LaunchToken and its BondingCurveManager
 #   DRY_RUN=1 ./script/verify.sh 10143           # print the commands only
 #
@@ -46,6 +46,9 @@ if [[ -z "$TOKEN" ]]; then
     "$(field poolManager)" "$(field factory)" "$(field lpFee)" "$(field tickSpacing)")"
   verify "$(field factory)" src/TokenFactory.sol:TokenFactory "$FACTORY_ARGS"
   verify "$(field migrator)" src/LiquidityMigrator.sol:LiquidityMigrator "$MIGRATOR_ARGS"
+  # Created by the factory's constructor with CREATE (nonce 1); stock reserves are ERC-1167 clones of it.
+  STOCK_RESERVE_IMPL="$(cast compute-address "$(field factory)" --nonce 1 | awk '{print $NF}')"
+  verify "$STOCK_RESERVE_IMPL" src/StockReserve.sol:StockReserve
 else
   case "$CHAIN" in
     143) RPC="${MONAD_RPC_URL:?set MONAD_RPC_URL}" ;;

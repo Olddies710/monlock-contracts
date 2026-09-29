@@ -176,6 +176,14 @@ contract DeployScriptTest is Test {
         assertEq(checker.check(tampered).failures, 5, "+ migrator provenance, token init code hash");
     }
 
+    function test_check_flagsAForeignStockReserveImplementation() public {
+        Deployment memory d = script.deploy(_config(), deployer);
+        assertEq(TokenFactory(d.factory).stockReserveImplementation(), vm.computeCreateAddress(d.factory, 1));
+        assertEq(checker.check(d).failures, 0);
+        vm.etch(TokenFactory(d.factory).stockReserveImplementation(), hex"00");
+        assertEq(checker.check(d).failures, 1);
+    }
+
     function test_check_stopsEarlyWhenNothingIsDeployed() public {
         Deployment memory d = script.deploy(_config(), deployer);
         vm.etch(d.migrator, "");

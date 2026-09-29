@@ -9,6 +9,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {BondingCurveManager} from "../src/BondingCurveManager.sol";
 import {LaunchToken} from "../src/LaunchToken.sol";
 import {LiquidityMigrator} from "../src/LiquidityMigrator.sol";
+import {StockReserve} from "../src/StockReserve.sol";
 import {TokenFactory} from "../src/TokenFactory.sol";
 import {LaunchPreset} from "../src/types/LaunchpadTypes.sol";
 import {MonadMainnet, MonadNetwork, MonadNetworks} from "./config/MonadAddresses.sol";
@@ -68,6 +69,15 @@ contract CheckDeployment is Script {
             r,
             factory.curveInitCodeHash() == curveHash && d.curveInitCodeHash == curveHash,
             "curve init code hash (factory = record = build)"
+        );
+        // Deployed by the factory's constructor (CREATE, nonce 1). It has no immutables, so its code is exactly the
+        // build's runtime code; every stock reserve is a clone of it.
+        address implementation = factory.stockReserveImplementation();
+        _expect(
+            r,
+            implementation == vm.computeCreateAddress(d.factory, 1)
+                && keccak256(implementation.code) == keccak256(type(StockReserve).runtimeCode),
+            "StockReserve implementation (factory nonce 1 = build)"
         );
 
         console.log("== Uniswap v4 wiring");

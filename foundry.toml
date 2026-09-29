@@ -15,7 +15,7 @@
 #   ci          heavy fuzz/invariant campaigns, warnings are errors
 #   production  deployment builds: default codegen + audit/verification output
 #
-#  Usage: FOUNDRY_PROFILE=ci forge test
+#  Usage: FOUNDRY_PROFILE=ci FOUNDRY_DENY=never forge test (warning gate: script/check-warnings.sh)
 # =============================================================================
 
 [profile.default]
@@ -88,6 +88,10 @@ runs = 16
 depth = 32
 
 # --- ci: long fuzz campaigns, zero tolerance for warnings ---------------------
+# A single solc run reports at most 256 warnings (then 4591 and silence), and Solady's deprecated assembly comments in
+# lib/ alone come close. The warning gate therefore compiles in groups (script/check-warnings.sh) and the full
+# `forge test` runs with FOUNDRY_DENY=never:
+#   ./script/check-warnings.sh && FOUNDRY_PROFILE=ci FOUNDRY_DENY=never forge test
 [profile.ci]
 deny = "warnings"
 verbosity = 3
