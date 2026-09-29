@@ -3,9 +3,9 @@ pragma solidity ^0.8.24;
 
 import {ERC20} from "solady/tokens/ERC20.sol";
 
+import {Presets} from "../script/config/Presets.sol";
 import {ILaunchToken} from "../src/interfaces/ILaunchToken.sol";
 import {LaunchpadTest} from "./utils/LaunchpadTest.sol";
-import {Presets} from "./utils/Presets.sol";
 
 contract LaunchTokenTest is LaunchpadTest {
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -25,9 +25,10 @@ contract LaunchTokenTest is LaunchpadTest {
         assertEq(token.totalSupply(), Presets.TOTAL_SUPPLY);
         assertEq(token.balanceOf(address(curve)), Presets.TOTAL_SUPPLY, "whole supply on the curve");
         assertEq(token.curve(), address(curve));
-        assertEq(token.factory(), address(harness));
+        assertEq(token.factory(), address(factory));
     }
 
+    /// @dev Token-level guard (the factory rejects such names earlier with `InvalidName`).
     function test_constructor_rejectsNamesLongerThan31Bytes() public {
         vm.expectRevert(ILaunchToken.InvalidDeployParams.selector);
         harness.launch(

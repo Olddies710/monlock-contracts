@@ -36,26 +36,28 @@ interface ITokenFactory {
 
     error CreationPaused();
     error PresetDisabled(uint32 presetId);
-    error InvalidPreset();
     error InvalidName();
     error InvalidSymbol();
     error InvalidCreator();
+    error InvalidTreasury();
+    error SaltAlreadyUsed();
     error SignatureExpired();
     error InvalidSignature();
     error NotDeploying();
+    error OwnershipRenounceDisabled();
 
     // ------------------------------------------------------------------ launch
 
-    /// @notice Deploys token + curve with CREATE2 and runs the optional dev buy (`msg.value > 0`).
-    ///         `msg.sender` is recorded as deployer; the salt is bound to it to prevent address squatting.
+    /// @notice Deploys token + curve with CREATE2 and runs the optional dev buy (`msg.value > 0`, tokens to
+    ///         `params.creator`). `msg.sender` is recorded as deployer; the salt is bound to it, so nobody can
+    ///         squat the predicted addresses.
     function createToken(CreateParams calldata params) external payable returns (address token, address curve);
 
-    /// @notice Same as `createToken`, authorized by an EIP-712 (or ERC-1271) signature of `params.creator`.
-    ///         Lets a bot or relayer deploy and pay gas on behalf of a creator who explicitly consented.
-    ///         Typed data: CreateToken(string name,string symbol,string metadataURI,address creator,
-    ///         address deployer,uint32 presetId,bytes32 salt,bytes context,uint256 deadline), with deployer ==
-    /// msg.sender. Replay is impossible: the same deployer and salt map to the same CREATE2 address, which can only be
-    /// deployed once.
+    /// @notice Same as `createToken`, authorized by an EIP-712 signature of `params.creator`: ECDSA for EOAs
+    ///         (including EIP-7702 delegated ones) or ERC-1271 for smart wallets. Lets a bot or relayer deploy and
+    ///         pay gas on behalf of a creator who explicitly consented. The signed `deployer` is `msg.sender`, so
+    ///         another relayer cannot reuse the signature, and replay is impossible: the same deployer and salt map
+    ///         to the same CREATE2 addresses, which can only be deployed once. Digest: `hashCreateToken`.
     function createTokenWithSig(CreateParams calldata params, uint256 deadline, bytes calldata signature)
         external
         payable
@@ -63,6 +65,15 @@ interface ITokenFactory {
 
     /// @notice Addresses a (deployer, salt) pair will produce. Lets bots announce a launch before it lands.
     function predictAddresses(address deployer, bytes32 salt) external view returns (address token, address curve);
+
+    /// @notice EIP-712 digest the creator signs for `createTokenWithSig`:
+    ///         CreateToken(string name,string symbol,string metadataURI,address creator,address deployer,
+    ///         uint32 presetId,bytes32 salt,bytes context,uint256 deadline).
+    ///         `minDevBuyOut` is not signed: the dev buy is funded (and bounded) by the deployer.
+    function hashCreateToken(CreateParams calldata params, address deployer, uint256 deadline)
+        external
+        view
+        returns (bytes32);
 
     // ------------------------------------------------------------------ registry and config (reads)
 
@@ -83,17 +94,18 @@ interface ITokenFactory {
 
     /// @notice Read by the LaunchToken constructor. Values live in transient storage during `createToken`,
     ///         which keeps the init code constant (predictable CREATE2 addresses, no circular dependency).
-    ///         Reverts with NotDeploying outside a deployment.
+    ///         Only the token being deployed can read them; anyone else gets NotDeploying.
     function tokenDeployParams()
         external
         view
         returns (bytes32 packedName, bytes32 packedSymbol, address curve, uint256 totalSupply);
 
-    /// @notice Read by the BondingCurveManager constructor. Same transient-storage mechanism.
+    /// @notice Read by the BondingCurveManager constructor. Same mechanism; only the curve being deployed.
     function curveDeployParams() external view returns (CurveDeployParams memory);
 
     // ------------------------------------------------------------------ admin (Ownable2Step, future launches only)
 
+    /// @notice Registers or replaces a preset. Validated with `LaunchPresetLib`; the migrator must be a contract.
     function setPreset(uint32 presetId, LaunchPreset calldata preset) external;
 
     function setProtocolTreasury(address treasury) external;

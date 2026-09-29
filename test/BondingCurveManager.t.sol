@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {Presets} from "../script/config/Presets.sol";
 import {BondingCurveManager} from "../src/BondingCurveManager.sol";
 import {LaunchToken} from "../src/LaunchToken.sol";
 import {IBondingCurveManager} from "../src/interfaces/IBondingCurveManager.sol";
@@ -9,7 +10,6 @@ import {LaunchPresetLib} from "../src/libraries/LaunchPresetLib.sol";
 import {CurveState, CurveStatus, FeeSplit, LaunchPreset} from "../src/types/LaunchpadTypes.sol";
 import {LaunchpadTest} from "./utils/LaunchpadTest.sol";
 import {MockMigrator, RejectingRecipient} from "./utils/Mocks.sol";
-import {Presets} from "./utils/Presets.sol";
 
 contract BondingCurveManagerTest is LaunchpadTest {
     uint256 internal constant REENTRANCY_GUARD_SLOT = 0x8000000000ab143c06; // Solady's lock slot
@@ -28,7 +28,7 @@ contract BondingCurveManagerTest is LaunchpadTest {
         assertEq(curve.maxBuyAmount(), Presets.TOTAL_SUPPLY / 100, "1% of total supply per tx");
         assertEq(curve.creatorFeeRecipient(), creator);
         assertEq(curve.token(), address(token));
-        assertEq(curve.factory(), address(harness));
+        assertEq(curve.factory(), address(factory));
         assertEq(curve.migrator(), address(migrator));
         assertEq(curve.launchBlock(), block.number);
 
@@ -50,30 +50,31 @@ contract BondingCurveManagerTest is LaunchpadTest {
         assertEq(maxDevBuyBps, 500);
     }
 
+    /// @dev Defense in depth: the curve validates its preset even if a factory did not.
     function test_constructor_rejectsInvalidPresets() public {
         LaunchPreset memory p = Presets.defaultPreset(address(migrator));
         p.curveFeeSplit.referrerBps = 999;
         vm.expectRevert(LaunchPresetLib.InvalidFeeSplit.selector);
-        _launch(p, bytes32("bad-split"));
+        _launchRaw(p, bytes32("bad-split"));
 
         p = Presets.defaultPreset(address(0));
         vm.expectRevert(LaunchPresetLib.InvalidMigrator.selector);
-        _launch(p, bytes32("bad-migrator"));
+        _launchRaw(p, bytes32("bad-migrator"));
 
         p = Presets.defaultPreset(address(migrator));
         p.maxDevBuyBps = 8000; // dev buy could sell out the curve
         vm.expectRevert(LaunchPresetLib.InvalidBuyLimits.selector);
-        _launch(p, bytes32("bad-devbuy"));
+        _launchRaw(p, bytes32("bad-devbuy"));
 
         p = Presets.defaultPreset(address(migrator));
         p.virtualTokenReserve0 = p.curveSupply;
         vm.expectRevert(LaunchPresetLib.InvalidVirtualReserves.selector);
-        _launch(p, bytes32("bad-vt0"));
+        _launchRaw(p, bytes32("bad-vt0"));
 
         p = Presets.defaultPreset(address(migrator));
         p.snipeFeeBps = 50; // below the base fee
         vm.expectRevert(LaunchPresetLib.InvalidFees.selector);
-        _launch(p, bytes32("bad-fees"));
+        _launchRaw(p, bytes32("bad-fees"));
     }
 
     function test_rejectsPlainMonTransfers() public {
@@ -297,18 +298,22 @@ contract BondingCurveManagerTest is LaunchpadTest {
         assertEq(address(rejecting).balance, toCreator, "a reverting recipient cannot block claims");
     }
 
+    /// @dev The real factory rejects a zero treasury; the curve still defends itself against a factory that
+    ///      reports one (here the test double).
     function test_claimFees_keepsProtocolShareWhileTreasuryUnset() public {
-        _rollPastSnipeWindow();
-        _buy(alice, 10 ether);
-        (uint256 toCreator, uint256 toProtocol) = curve.claimableFees();
+        (, BondingCurveManager raw) = _launchRaw(Presets.defaultPreset(address(migrator)), bytes32("raw"));
+        vm.roll(raw.launchBlock() + Presets.SNIPE_DECAY_BLOCKS);
+        vm.prank(alice);
+        raw.buy{value: 10 ether}(0, address(0));
+        (uint256 toCreator, uint256 toProtocol) = raw.claimableFees();
         harness.setProtocolTreasury(address(0));
-        curve.claimFees();
+        raw.claimFees();
         assertEq(creator.balance, toCreator);
-        (, uint256 stillOwed) = curve.claimableFees();
+        (, uint256 stillOwed) = raw.claimableFees();
         assertEq(stillOwed, toProtocol, "not burned");
 
         harness.setProtocolTreasury(treasury);
-        curve.claimFees();
+        raw.claimFees();
         assertEq(treasury.balance, toProtocol);
     }
 
@@ -331,9 +336,8 @@ contract BondingCurveManagerTest is LaunchpadTest {
 
     function test_devBuy_atomicWithCreationAtBaseFee() public {
         vm.deal(address(this), 10 ether);
-        (LaunchToken t, BondingCurveManager c) = harness.launch{value: 10 ether}(
-            Presets.defaultPreset(address(migrator)), "Dev Cat", "DCAT", creator, bytes32("dev"), 0
-        );
+        (address t_, address c_) = factory.createToken{value: 10 ether}(_params(bytes32("dev")));
+        (LaunchToken t, BondingCurveManager c) = (LaunchToken(t_), BondingCurveManager(c_));
         CurveState memory s = c.state();
         assertEq(s.totalFeesAccrued, 0.1 ether, "base fee only, no snipe tax");
         assertEq(s.realMonReserve, 9.9 ether);
@@ -345,9 +349,7 @@ contract BondingCurveManagerTest is LaunchpadTest {
         uint256 out = BondingCurveMath.tokensOut(Presets.EXPECTED_VM0, Presets.EXPECTED_VT0, 99 ether);
         uint256 cap = Presets.TOTAL_SUPPLY * Presets.MAX_DEV_BUY_BPS / 10_000;
         vm.expectRevert(abi.encodeWithSelector(IBondingCurveManager.MaxBuyExceeded.selector, out, cap));
-        harness.launch{value: 100 ether}(
-            Presets.defaultPreset(address(migrator)), "Dev Cat", "DCAT", creator, bytes32("dev-cap"), 0
-        );
+        factory.createToken{value: 100 ether}(_params(bytes32("dev-cap")));
     }
 
     function test_devBuy_onlyFactoryAndOnlyFirst() public {
@@ -356,9 +358,10 @@ contract BondingCurveManagerTest is LaunchpadTest {
         curve.devBuy{value: 1 ether}(0, alice);
 
         _buy(alice, 1 ether);
-        vm.deal(address(this), 1 ether);
+        vm.deal(address(factory), 1 ether);
+        vm.prank(address(factory));
         vm.expectRevert(IBondingCurveManager.DevBuyUnavailable.selector);
-        harness.callDevBuy{value: 1 ether}(curve, 0, creator);
+        curve.devBuy{value: 1 ether}(0, creator);
     }
 
     // ------------------------------------------------------------------ completion and graduation
@@ -473,8 +476,7 @@ contract BondingCurveManagerTest is LaunchpadTest {
     }
 
     function test_tradesOnDifferentLaunchesShareNoState() public {
-        (LaunchToken otherToken, BondingCurveManager otherCurve) =
-            _launch(Presets.defaultPreset(address(migrator)), bytes32("other"));
+        (LaunchToken otherToken, BondingCurveManager otherCurve) = _launch(bytes32("other"));
         vm.record();
         _buy(alice, 1 ether);
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(otherCurve));

@@ -3,8 +3,8 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
+import {Presets} from "../script/config/Presets.sol";
 import {BondingCurveMath} from "../src/libraries/BondingCurveMath.sol";
-import {Presets} from "./utils/Presets.sol";
 
 /// @dev External wrapper so reverts of internal library functions can be asserted.
 contract MathWrapper {

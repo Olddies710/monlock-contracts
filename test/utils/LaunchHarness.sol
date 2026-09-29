@@ -7,8 +7,9 @@ import {BondingCurveManager} from "../../src/BondingCurveManager.sol";
 import {LaunchToken} from "../../src/LaunchToken.sol";
 import {CurveDeployParams, LaunchPreset} from "../../src/types/LaunchpadTypes.sol";
 
-/// @notice Test double of the Phase 2 TokenFactory. Same deployment mechanics as production: constant init code,
-///         parameters served through constructor callbacks, CREATE2 addresses predicted from (deployer, salt).
+/// @notice Test double of the TokenFactory with the same deployment mechanics (constant init code, parameters served
+///         through constructor callbacks, CREATE2 addresses from (deployer, salt)) but none of its validation, and a
+///         treasury that can be zero. Used only to test constructor-level and curve-level defenses in isolation.
 contract LaunchHarness {
     address public protocolTreasury;
 
@@ -73,11 +74,6 @@ contract LaunchHarness {
 
         if (address(token) != predictedToken || address(curve) != predictedCurve) revert AddressMismatch();
         if (msg.value != 0) curve.devBuy{value: msg.value}(minDevBuyOut, creator);
-    }
-
-    /// @notice Exposes `devBuy` as the factory would call it, for access-control tests.
-    function callDevBuy(BondingCurveManager curve, uint256 minOut, address recipient) external payable {
-        curve.devBuy{value: msg.value}(minOut, recipient);
     }
 
     function _create2Address(bytes32 salt, bytes32 initCodeHash) private view returns (address) {

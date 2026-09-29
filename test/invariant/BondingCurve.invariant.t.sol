@@ -3,9 +3,9 @@ pragma solidity ^0.8.24;
 
 import {console} from "forge-std/console.sol";
 
+import {Presets} from "../../script/config/Presets.sol";
 import {CurveState, CurveStatus} from "../../src/types/LaunchpadTypes.sol";
 import {LaunchpadTest} from "../utils/LaunchpadTest.sol";
-import {Presets} from "../utils/Presets.sol";
 import {CurveHandler} from "./CurveHandler.sol";
 
 /// @notice Stateful invariants of one launch under arbitrary sequences of actions (ARCHITECTURE.md §4.4, §4.9).

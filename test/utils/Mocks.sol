@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {ECDSA} from "solady/utils/ECDSA.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 
 /// @notice Stand-in for the Phase 3 LiquidityMigrator: records what the curve hands over at graduation.
@@ -37,3 +38,20 @@ contract RejectingRecipient {
         revert("no MON");
     }
 }
+
+/// @notice Minimal ERC-1271 smart wallet controlled by one ECDSA key.
+contract MockSmartWallet {
+    bytes4 internal constant MAGIC = 0x1626ba7e;
+    address public immutable signer;
+
+    constructor(address signer_) {
+        signer = signer_;
+    }
+
+    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
+        return ECDSA.tryRecoverCalldata(hash, signature) == signer ? MAGIC : bytes4(0xffffffff);
+    }
+}
+
+/// @notice Contract without ERC-1271, used as an EIP-7702 delegation target.
+contract EmptyDelegate {}

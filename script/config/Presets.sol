@@ -4,7 +4,8 @@ pragma solidity ^0.8.24;
 import {BondingCurveMath} from "../../src/libraries/BondingCurveMath.sol";
 import {FeeSplit, LaunchPreset} from "../../src/types/LaunchpadTypes.sol";
 
-/// @notice Approved Phase 0 parameters (ARCHITECTURE.md §4.6, §5.2, §7.1).
+/// @notice Approved launch parameters (ARCHITECTURE.md §4.6, §5.2, §7.1). Shared by deployment scripts
+///         (`ComputePreset`, and the Phase 4 deploy script) and by the test suite as its oracle.
 library Presets {
     uint256 internal constant TOTAL_SUPPLY = 1_000_000_000e18;
     uint256 internal constant CURVE_SUPPLY = 800_000_000e18;
@@ -20,6 +21,8 @@ library Presets {
     /// @dev Exact values from `deriveVirtualReserves` (cross-checked with rational arithmetic off-chain).
     uint256 internal constant EXPECTED_VT0 = 1_085_714_285_714_285_714_285_714_286;
     uint256 internal constant EXPECTED_VM0 = 714_285_714_285_714_285_715;
+
+    uint32 internal constant DEFAULT_PRESET_ID = 1;
 
     function defaultPreset(address migrator) internal pure returns (LaunchPreset memory p) {
         (uint256 vT0, uint256 vM0) =

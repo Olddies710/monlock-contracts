@@ -3,22 +3,28 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
+import {Presets} from "../../script/config/Presets.sol";
 import {BondingCurveManager} from "../../src/BondingCurveManager.sol";
 import {LaunchToken} from "../../src/LaunchToken.sol";
-import {CurveState, LaunchPreset} from "../../src/types/LaunchpadTypes.sol";
+import {TokenFactory} from "../../src/TokenFactory.sol";
+import {CreateParams, CurveState, LaunchPreset} from "../../src/types/LaunchpadTypes.sol";
 import {LaunchHarness} from "./LaunchHarness.sol";
 import {MockMigrator} from "./Mocks.sol";
-import {Presets} from "./Presets.sol";
 
-/// @notice Shared fixture: one default launch on a Monad-like chain (chain id 143).
+/// @notice Shared fixture on a Monad-like chain (chain id 143): the real TokenFactory with the approved preset
+///         registered, and one default launch created through it.
 abstract contract LaunchpadTest is Test {
     uint256 internal constant MONAD_CHAIN_ID = 143;
+    uint32 internal constant PRESET_ID = Presets.DEFAULT_PRESET_ID;
 
-    LaunchHarness internal harness;
+    TokenFactory internal factory;
     MockMigrator internal migrator;
     LaunchToken internal token;
     BondingCurveManager internal curve;
+    /// @dev Test double that deploys curves without factory-side validation (raw constructor tests only).
+    LaunchHarness internal harness;
 
+    address internal owner = makeAddr("owner");
     address internal treasury = makeAddr("treasury");
     address internal creator = makeAddr("creator");
     address internal referrer = makeAddr("referrer");
@@ -34,15 +40,36 @@ abstract contract LaunchpadTest is Test {
         vm.warp(1_750_000_000);
 
         migrator = new MockMigrator();
+        factory = new TokenFactory(owner, treasury);
+        vm.prank(owner);
+        factory.setPreset(PRESET_ID, Presets.defaultPreset(address(migrator)));
         harness = new LaunchHarness(treasury);
-        (token, curve) = _launch(Presets.defaultPreset(address(migrator)), bytes32("default"));
+
+        (token, curve) = _launch(bytes32("default"));
 
         vm.deal(alice, 100_000 ether);
         vm.deal(bob, 100_000 ether);
         vm.deal(carol, 100_000 ether);
     }
 
-    function _launch(LaunchPreset memory preset, bytes32 salt)
+    function _params(bytes32 salt) internal view returns (CreateParams memory p) {
+        p.name = "Monad Cat";
+        p.symbol = "MCAT";
+        p.metadataURI = "ipfs://bafy-monad-cat";
+        p.creator = creator;
+        p.presetId = PRESET_ID;
+        p.salt = salt;
+        p.context = abi.encodePacked("cast:0xabc");
+    }
+
+    /// @dev Launch through the real factory (deployer = this test contract).
+    function _launch(bytes32 salt) internal returns (LaunchToken token_, BondingCurveManager curve_) {
+        (address t, address c) = factory.createToken(_params(salt));
+        return (LaunchToken(t), BondingCurveManager(c));
+    }
+
+    /// @dev Launch through the test double, bypassing factory validation (constructor-level tests).
+    function _launchRaw(LaunchPreset memory preset, bytes32 salt)
         internal
         returns (LaunchToken token_, BondingCurveManager curve_)
     {

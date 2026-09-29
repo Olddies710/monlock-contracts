@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {Presets} from "../script/config/Presets.sol";
 import {CurveState, CurveStatus} from "../src/types/LaunchpadTypes.sol";
 import {LaunchpadTest} from "./utils/LaunchpadTest.sol";
-import {Presets} from "./utils/Presets.sol";
 
 contract BondingCurveFuzzTest is LaunchpadTest {
     address internal referrer2 = makeAddr("referrer2");
