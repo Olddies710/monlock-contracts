@@ -61,7 +61,7 @@ forge script script/SmokeLaunch.s.sol --sig "launch()" "${BROADCAST[@]}" | grep 
 TOKEN="$(jq -r .returns.token.value broadcast/SmokeLaunch.s.sol/31337/launch-latest.json)"
 mine 1 # a sell in the dev-buy block would hit the same-block round-trip guard
 forge script script/SmokeLaunch.s.sol --sig "trade(address)" "$TOKEN" "${BROADCAST[@]}" | grep -E '^  fee now'
-mine 200 # anti-snipe window (~80 s on Monad)
+mine 200 # anti-snipe window (~60 s of 300 ms blocks on Monad)
 forge script script/SmokeLaunch.s.sol --sig "graduate(address)" "$TOKEN" "${BROADCAST[@]}" | grep -E '^  (buying|graduated)'
 forge script script/SmokeLaunch.s.sol --sig "claim(address)" "$TOKEN" "${BROADCAST[@]}" | grep -E '^  curve fees'
 
