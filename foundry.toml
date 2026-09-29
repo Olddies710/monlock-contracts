@@ -4,9 +4,10 @@
 #  Target chain facts that drive these settings (see ../ARCHITECTURE.md §1):
 #   - Monad supports every opcode up to the Fusaka fork; max code size 128 KB.
 #   - Cold account access = 10,100 gas, cold SLOAD = 8,100 gas (4x Ethereum),
-#     and storage is warmed per 128-slot page. Foundry gas reports use the
-#     Ethereum schedule: treat them as relative numbers only.
+#     and storage is warmed per 128-slot page.
 #   - Mainnet chain id 143, testnet chain id 10143.
+#  `network = "monad"` runs tests on Foundry's Monad EVM: gas reports use
+#  Monad's pricing, and forks of chain 143 are allowed.
 #
 #  Profiles:
 #   default     day-to-day development (same codegen as production)
@@ -51,6 +52,7 @@ bytecode_hash = "none"
 cbor_metadata = false
 
 # --- Execution / tests --------------------------------------------------------
+network = "monad"
 ffi = false
 fs_permissions = [
     { access = "read", path = "./out" },
