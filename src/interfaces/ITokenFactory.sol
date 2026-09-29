@@ -1,0 +1,103 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {CreateParams, CurveDeployParams, LaunchPreset} from "../types/LaunchpadTypes.sol";
+
+/// @title ITokenFactory
+/// @notice Entry point for launches, built for humans and bots alike (Clanker-style programmatic and social
+///         deploys). One call deploys a fixed-supply LaunchToken plus its own BondingCurveManager instance and,
+///         optionally, executes the creator's dev buy in the same transaction.
+///
+///         Concurrency: the factory is read-mostly. Creation writes one mapping entry (curveOf) and nothing
+///         global: no arrays, no counters. Launch history is served by events to the indexer.
+///
+///         Trust model: the owner can edit presets, the treasury and pause *creation*. It cannot pause trading,
+///         change parameters of a live curve, mint tokens or move user funds.
+interface ITokenFactory {
+    // ------------------------------------------------------------------ events
+
+    event TokenCreated(
+        address indexed token,
+        address indexed curve,
+        address indexed creator,
+        address deployer,
+        address interfaceRecipient,
+        uint32 presetId,
+        string name,
+        string symbol,
+        string metadataURI,
+        bytes context
+    );
+
+    event PresetUpdated(uint32 indexed presetId, LaunchPreset preset);
+    event ProtocolTreasuryUpdated(address indexed treasury);
+    event CreationPausedUpdated(bool paused);
+
+    // ------------------------------------------------------------------ errors
+
+    error CreationPaused();
+    error PresetDisabled(uint32 presetId);
+    error InvalidPreset();
+    error InvalidName();
+    error InvalidSymbol();
+    error InvalidCreator();
+    error SignatureExpired();
+    error InvalidSignature();
+    error NotDeploying();
+
+    // ------------------------------------------------------------------ launch
+
+    /// @notice Deploys token + curve with CREATE2 and runs the optional dev buy (`msg.value > 0`).
+    ///         `msg.sender` is recorded as deployer; the salt is bound to it to prevent address squatting.
+    function createToken(CreateParams calldata params) external payable returns (address token, address curve);
+
+    /// @notice Same as `createToken`, authorized by an EIP-712 (or ERC-1271) signature of `params.creator`.
+    ///         Lets a bot or relayer deploy and pay gas on behalf of a creator who explicitly consented.
+    ///         Typed data: CreateToken(string name,string symbol,string metadataURI,address creator,
+    ///         address deployer,address interfaceRecipient,uint32 presetId,bytes32 salt,bytes context,
+    ///         uint256 deadline), with deployer == msg.sender. Replay is impossible: the same deployer and salt
+    ///         map to the same CREATE2 address, which can only be deployed once.
+    function createTokenWithSig(CreateParams calldata params, uint256 deadline, bytes calldata signature)
+        external
+        payable
+        returns (address token, address curve);
+
+    /// @notice Addresses a (deployer, salt) pair will produce. Lets bots announce a launch before it lands.
+    function predictAddresses(address deployer, bytes32 salt) external view returns (address token, address curve);
+
+    // ------------------------------------------------------------------ registry and config (reads)
+
+    /// @notice Curve of `token`, or address(0) if the token was not launched by this factory.
+    function curveOf(address token) external view returns (address curve);
+
+    function preset(uint32 presetId) external view returns (LaunchPreset memory);
+
+    function protocolTreasury() external view returns (address);
+
+    function creationPaused() external view returns (bool);
+
+    function tokenInitCodeHash() external view returns (bytes32);
+
+    function curveInitCodeHash() external view returns (bytes32);
+
+    // ------------------------------------------------------------------ constructor callbacks
+
+    /// @notice Read by the LaunchToken constructor. Values live in transient storage during `createToken`,
+    ///         which keeps the init code constant (predictable CREATE2 addresses, no circular dependency).
+    ///         Reverts with NotDeploying outside a deployment.
+    function tokenDeployParams()
+        external
+        view
+        returns (bytes32 packedName, bytes32 packedSymbol, address curve, uint256 totalSupply);
+
+    /// @notice Read by the BondingCurveManager constructor. Same transient-storage mechanism.
+    function curveDeployParams() external view returns (CurveDeployParams memory);
+
+    // ------------------------------------------------------------------ admin (Ownable2Step, future launches only)
+
+    function setPreset(uint32 presetId, LaunchPreset calldata preset) external;
+
+    function setProtocolTreasury(address treasury) external;
+
+    function setCreationPaused(bool paused) external;
+}

@@ -1,0 +1,127 @@
+# =============================================================================
+#  Foundry — Monad Hybrid Launchpad
+#
+#  Target chain facts that drive these settings (see ../ARCHITECTURE.md §1):
+#   - Monad supports every opcode up to the Fusaka fork; max code size 128 KB.
+#   - Cold account access = 10,100 gas, cold SLOAD = 8,100 gas (4x Ethereum),
+#     and storage is warmed per 128-slot page. Foundry gas reports use the
+#     Ethereum schedule: treat them as relative numbers only.
+#   - Mainnet chain id 143, testnet chain id 10143.
+#
+#  Profiles:
+#   default     day-to-day development (same codegen as production)
+#   lite        fast compile for rapid iteration (optimizer off)
+#   ci          heavy fuzz/invariant campaigns, warnings are errors
+#   production  deployment builds: default codegen + audit/verification output
+#
+#  Usage: FOUNDRY_PROFILE=ci forge test
+# =============================================================================
+
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+cache_path = "cache"
+broadcast = "broadcast"
+snapshots = "snapshots"
+auto_detect_remappings = false # remappings.txt is the single source of truth
+
+# --- Compiler -----------------------------------------------------------------
+# Sources use `pragma solidity ^0.8.24`; the build pins one exact compiler.
+# 0.8.37 (2026-09-10) has no entries in the official bugs list, and it fixes
+# TransientStorageClearingHelperCollision (<0.8.34). We use transient storage.
+solc_version = "0.8.37"
+auto_detect_solc = false
+# Monad accepts opcodes up to Fusaka/osaka. We target prague so the bytecode
+# doesn't depend on CLZ and stays portable to Anvil forks and other tooling.
+evm_version = "prague"
+optimizer = true
+# Optimize for runtime cost: trades run millions of times, deploys run once.
+optimizer_runs = 20_000
+# Legacy pipeline on every profile: the code we test is the code we deploy.
+via_ir = false
+# Deterministic bytecode: stable CREATE2 init-code hashes across machines,
+# so the TS SDK can predict token and curve addresses.
+bytecode_hash = "none"
+cbor_metadata = false
+
+# --- Execution / tests --------------------------------------------------------
+ffi = false
+fs_permissions = [
+    { access = "read", path = "./out" },
+    { access = "read-write", path = "./deployments" },
+]
+gas_reports = ["TokenFactory", "BondingCurveManager", "LiquidityMigrator", "LaunchToken"]
+# Monad per-tx gas limit is 30M; keep the test EVM in the same ballpark.
+gas_limit = 30_000_000
+# Monad's 128 KB code size limit (Foundry's test EVM defaults to EIP-170's 24 KB).
+code_size_limit = 131_072
+
+[profile.default.fuzz]
+runs = 512
+max_test_rejects = 131_072
+
+[profile.default.invariant]
+runs = 128
+depth = 64
+fail_on_revert = false
+
+# --- lite: optimizer off for fast feedback loops ------------------------------
+[profile.lite]
+optimizer = false
+
+[profile.lite.fuzz]
+runs = 64
+
+[profile.lite.invariant]
+runs = 16
+depth = 32
+
+# --- ci: long fuzz campaigns, zero tolerance for warnings ---------------------
+[profile.ci]
+deny = "warnings"
+verbosity = 3
+
+[profile.ci.fuzz]
+runs = 20_000
+
+[profile.ci.invariant]
+runs = 512
+depth = 256
+fail_on_revert = false
+
+# --- production: deployment artifacts (same codegen as default) ---------------
+[profile.production]
+deny = "warnings"
+build_info = true
+extra_output = ["storageLayout"]
+
+# --- Formatting / lint ----------------------------------------------------------
+[fmt]
+line_length = 120
+tab_width = 4
+bracket_spacing = false
+int_types = "long"
+multiline_func_header = "attributes_first"
+quote_style = "double"
+number_underscore = "thousands"
+sort_imports = true
+wrap_comments = true
+
+[lint]
+lint_on_build = true
+
+# --- Networks -------------------------------------------------------------------
+# URLs come from the environment (see ../.env.example); never hardcode keys.
+[rpc_endpoints]
+monad = "${MONAD_RPC_URL}"
+monad_testnet = "${MONAD_TESTNET_RPC_URL}"
+local = "http://127.0.0.1:8545"
+
+# Monadscan is Etherscan-family (Etherscan API v2, one key for every chain).
+# MonadVision verification: `forge verify-contract --verifier sourcify`.
+[etherscan]
+monad = { key = "${ETHERSCAN_API_KEY}", chain = 143 }
+monad_testnet = { key = "${ETHERSCAN_API_KEY}", chain = 10143 }
