@@ -21,7 +21,6 @@ interface ITokenFactory {
         address indexed curve,
         address indexed creator,
         address deployer,
-        address interfaceRecipient,
         uint32 presetId,
         string name,
         string symbol,
@@ -54,9 +53,9 @@ interface ITokenFactory {
     /// @notice Same as `createToken`, authorized by an EIP-712 (or ERC-1271) signature of `params.creator`.
     ///         Lets a bot or relayer deploy and pay gas on behalf of a creator who explicitly consented.
     ///         Typed data: CreateToken(string name,string symbol,string metadataURI,address creator,
-    ///         address deployer,address interfaceRecipient,uint32 presetId,bytes32 salt,bytes context,
-    ///         uint256 deadline), with deployer == msg.sender. Replay is impossible: the same deployer and salt
-    ///         map to the same CREATE2 address, which can only be deployed once.
+    ///         address deployer,uint32 presetId,bytes32 salt,bytes context,uint256 deadline), with deployer ==
+    /// msg.sender. Replay is impossible: the same deployer and salt map to the same CREATE2 address, which can only be
+    /// deployed once.
     function createTokenWithSig(CreateParams calldata params, uint256 deadline, bytes calldata signature)
         external
         payable

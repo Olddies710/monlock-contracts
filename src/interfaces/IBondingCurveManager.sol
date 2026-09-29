@@ -17,13 +17,14 @@ interface IBondingCurveManager {
 
     /// @notice Emitted on every trade. Carries post-trade reserves so indexers can rebuild state from logs
     ///         alone (Monad full nodes do not serve arbitrary historical state).
-    /// @param monAmount Buy: gross MON paid in. Sell: net MON paid out.
+    /// @param monAmount Buy: gross MON charged (after any refund). Sell: net MON paid out.
     /// @param fee Base fee accrued to the fee recipients.
     /// @param snipeTax Anti-snipe surcharge, donated to the curve reserve (never to the creator).
     event Trade(
         address indexed trader,
         address indexed recipient,
-        bool indexed isBuy,
+        address indexed referrer,
+        bool isBuy,
         uint256 monAmount,
         uint256 tokenAmount,
         uint256 fee,
@@ -32,7 +33,8 @@ interface IBondingCurveManager {
         uint256 realTokenReserve
     );
 
-    /// @notice The curve sold out and trading halted. Graduation follows atomically or via `graduate()`.
+    /// @notice The curve sold out: trading is frozen and graduation is enabled (atomically attempted in the same
+    ///         transaction, retryable with `graduate()`). `realMonReserve >= R` by construction.
     event CurveCompleted(uint256 realMonReserve);
 
     /// @notice Liquidity was migrated to the DEX and locked. `tokensBurned` is the unused LP reserve.
@@ -41,7 +43,8 @@ interface IBondingCurveManager {
     /// @notice The atomic migration attempt reverted. The curve stays Completed and `graduate()` can retry.
     event MigrationFailed(bytes reason);
 
-    event FeesClaimed(uint256 toCreator, uint256 toProtocol, uint256 toInterface);
+    event FeesClaimed(uint256 toCreator, uint256 toProtocol);
+    event ReferrerFeesClaimed(address indexed referrer, uint256 amount);
     event CreatorFeeRecipientUpdated(address indexed recipient);
 
     // ------------------------------------------------------------------ errors
@@ -49,46 +52,61 @@ interface IBondingCurveManager {
     error DeadlineExpired();
     error ZeroAmount();
     error InvalidRecipient();
+    error InvalidReferrer();
     error NotTrading();
     error NotCompleted();
     error InsufficientOutput(uint256 amountOut, uint256 minAmountOut);
-    error ExcessiveInput(uint256 amountIn, uint256 maxAmountIn);
     error MaxBuyExceeded(uint256 amountOut, uint256 maxAmountOut);
     error OnlyFactory();
     error OnlyCreator();
+    error OnlySelf();
+    error DevBuyUnavailable();
+    error InvalidDeployParams();
 
     // ------------------------------------------------------------------ trading
 
-    /// @notice Buys tokens with exactly `msg.value` MON. If the buy exceeds the remaining supply it is clipped,
-    ///         the excess MON is refunded and the curve graduates in the same transaction.
-    function buy(uint256 minTokensOut, address recipient, uint256 deadline) external payable returns (uint256 tokensOut);
+    /// @notice Buys tokens for `msg.sender` with exactly `msg.value` MON. If the buy exceeds the remaining supply
+    ///         it is clipped, the excess MON is refunded and the curve completes (graduation is attempted in the
+    ///         same transaction). `referrer` (or address(0)) earns the referrer share of the base fee.
+    function buy(uint256 minTokensOut, address referrer) external payable returns (uint256 tokensOut);
 
-    /// @notice Buys exactly `tokensOut` tokens; refunds `msg.value - monIn`. Useful for bots targeting size.
-    function buyExactOut(uint256 tokensOut, address recipient, uint256 deadline)
+    /// @notice `buy` with an explicit token recipient and a deadline (routers, bots, MEV-sensitive flows).
+    ///         A clipped buy refunds the excess to `msg.sender`.
+    function buyTo(address recipient, uint256 minTokensOut, address referrer, uint256 deadline)
         external
         payable
-        returns (uint256 monIn);
+        returns (uint256 tokensOut);
 
-    /// @notice Sells `tokensIn` from `msg.sender` and pays MON to `recipient`. No approve needed: the token grants
-    ///         its curve an implicit allowance, so a sell is one transaction and touches no allowance slot.
-    function sell(uint256 tokensIn, uint256 minMonOut, address recipient, uint256 deadline)
+    /// @notice Sells `tokenAmount` from `msg.sender` and pays the MON to `msg.sender`. No approve needed: the
+    ///         token grants its curve an implicit allowance. The referrer share goes to the protocol.
+    function sell(uint256 tokenAmount, uint256 minMonOut) external returns (uint256 monOut);
+
+    /// @notice `sell` with an explicit MON recipient, a referrer and a deadline.
+    function sellTo(address recipient, uint256 tokenAmount, uint256 minMonOut, address referrer, uint256 deadline)
         external
         returns (uint256 monOut);
 
     /// @notice Creator's initial buy, executed by the factory inside the creation transaction. Nobody can
-    ///         front-run it, so it pays the base fee only. Capped at `maxDevBuyBps` of the curve supply.
+    ///         front-run it, so it pays the base fee only. Capped at `maxDevBuyBps` of the total supply.
     function devBuy(uint256 minTokensOut, address recipient) external payable returns (uint256 tokensOut);
 
-    // ------------------------------------------------------------------ quotes (same math as the trades)
+    // ------------------------------------------------------------------ quotes (same code path as the trades)
 
-    function quoteBuy(uint256 monIn) external view returns (uint256 tokensOut, uint256 fee, uint256 snipeTax);
+    /// @notice Result of `buy` with `monIn` at the current block. Does not apply the per-tx anti-snipe cap.
+    /// @dev `refund` is the MON returned when the buy is clipped at the end of the curve (0 otherwise).
+    function quoteBuy(uint256 monIn)
+        external
+        view
+        returns (uint256 tokensOut, uint256 fee, uint256 snipeTax, uint256 refund);
 
-    function quoteBuyExactOut(uint256 tokensOut) external view returns (uint256 monIn, uint256 fee, uint256 snipeTax);
-
-    function quoteSell(uint256 tokensIn) external view returns (uint256 monOut, uint256 fee, uint256 snipeTax);
+    /// @notice Result of `sell` with `tokenAmount` at the current block.
+    function quoteSell(uint256 tokenAmount) external view returns (uint256 monOut, uint256 fee, uint256 snipeTax);
 
     /// @notice Total fee at the current block: base fee plus the decaying anti-snipe component.
     function currentFeeBps() external view returns (uint256);
+
+    /// @notice Largest buy (in tokens) allowed in one transaction at the current block.
+    function maxBuyAmount() external view returns (uint256);
 
     function state() external view returns (CurveState memory);
 
@@ -99,12 +117,18 @@ interface IBondingCurveManager {
 
     // ------------------------------------------------------------------ fees (pull accounting, push payout)
 
-    /// @notice Fees owed to each recipient: split(totalFeesAccrued) - alreadyClaimed.
-    function claimableFees() external view returns (uint256 toCreator, uint256 toProtocol, uint256 toInterface);
+    /// @notice MON owed to the creator and to the protocol. The protocol is the residual claimant.
+    function claimableFees() external view returns (uint256 toCreator, uint256 toProtocol);
 
-    /// @notice Pays every recipient what it is owed. Callable by anyone; a reverting recipient cannot block the
-    ///         others (payouts use a forced transfer).
+    /// @notice MON owed to `referrer` on this curve.
+    function referrerFees(address referrer) external view returns (uint256);
+
+    /// @notice Pays the creator and the protocol what they are owed. Callable by anyone; a reverting recipient
+    ///         cannot block the other (forced transfer).
     function claimFees() external;
+
+    /// @notice Pays `referrer` what it is owed on this curve. Callable by anyone (funds only go to `referrer`).
+    function claimReferrerFees(address referrer) external returns (uint256 amount);
 
     /// @notice Creator-only: where creator fees go, for the curve phase and for post-graduation LP fees.
     function setCreatorFeeRecipient(address recipient) external;
@@ -120,8 +144,6 @@ interface IBondingCurveManager {
     function creator() external view returns (address);
 
     function creatorFeeRecipient() external view returns (address);
-
-    function interfaceRecipient() external view returns (address);
 
     /// @notice Block of the creation transaction. Anti-snipe decay is measured in blocks from here because
     ///         Monad's block.timestamp has 1 s resolution (3-4 blocks share the same timestamp).
@@ -142,5 +164,8 @@ interface IBondingCurveManager {
             FeeSplit memory lpFeeSplit
         );
 
-    function snipeParams() external view returns (uint256 snipeFeeBps, uint256 snipeDecayBlocks, uint256 maxBuyBps);
+    function snipeParams()
+        external
+        view
+        returns (uint256 snipeFeeBps, uint256 snipeDecayBlocks, uint256 maxBuyBps, uint256 maxDevBuyBps);
 }

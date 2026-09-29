@@ -27,6 +27,9 @@ cache_path = "cache"
 broadcast = "broadcast"
 snapshots = "snapshots"
 auto_detect_remappings = false # remappings.txt is the single source of truth
+# Compiler warnings from dependencies (e.g. solc 0.8.37 deprecating Solady's virtual modifiers) must not
+# fail `deny = "warnings"` profiles. Warnings in our own sources still do.
+ignored_warnings_from = ["lib"]
 
 # --- Compiler -----------------------------------------------------------------
 # Sources use `pragma solidity ^0.8.24`; the build pins one exact compiler.
@@ -112,6 +115,10 @@ wrap_comments = true
 
 [lint]
 lint_on_build = true
+# `reentrancy-events` flags emits in functions with no external call at all (e.g. LaunchToken._transfer).
+# Every state-changing entry point is `nonReentrant` (transient lock) and the token makes no external calls,
+# so logs cannot be reordered by reentrancy. Events are still emitted before interactions where possible.
+exclude_lints = ["reentrancy-events"]
 
 # --- Networks -------------------------------------------------------------------
 # URLs come from the environment (see ../.env.example); never hardcode keys.

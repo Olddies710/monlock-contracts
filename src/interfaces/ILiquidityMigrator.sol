@@ -40,6 +40,8 @@ interface ILiquidityMigrator {
     /// @notice Called by a registered curve inside its graduation. The curve transfers `tokenAmount` tokens to
     ///         this contract right before the call and sends the MON for liquidity as `msg.value`.
     ///         The opening sqrtPriceX96 is derived from the ratio tokenAmount / msg.value, rounded down.
+    /// @dev Must never send MON back to the curve (it has no `receive`, by design every wei is accounted): MON
+    ///      dust goes to the protocol treasury and token dust is burned here.
     function migrate(address token, uint256 tokenAmount) external payable returns (bytes32 poolId, uint128 liquidity);
 
     /// @notice Collects the LP fees of `token`'s locked position and pays them out according to the curve's
