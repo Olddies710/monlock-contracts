@@ -70,7 +70,7 @@ contract SmokeLaunch is Script {
 
     function graduate(address token) external {
         BondingCurveManager curve = _curve(token);
-        (,, uint256 decayBlocks,) = curve.snipeParams();
+        (, uint256 decayBlocks,,) = curve.snipeParams();
         uint256 windowEnd = curve.launchBlock() + decayBlocks;
         if (vm.getBlockNumber() < windowEnd) revert SnipeWindowOpen(windowEnd - vm.getBlockNumber());
 

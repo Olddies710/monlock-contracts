@@ -1,0 +1,22 @@
+{
+  "buy_existingHolder": "74907",
+  "buy_graduation": "611585",
+  "buy_newHolder": "91907",
+  "buy_snipeWindow_firstBuy": "109421",
+  "buy_withReferrer": "104072",
+  "claimFees": "155679",
+  "claimReferrerFees": "76664",
+  "collectFees": "222558",
+  "createToken": "3384962",
+  "createTokenWithSig": "3395507",
+  "createToken_devBuy": "3448077",
+  "deploy_LiquidityMigrator": "2328111",
+  "deploy_TokenFactory": "7238006",
+  "graduate_retry": "546818",
+  "sell": "82233",
+  "sellTo_withReferrer": "95339",
+  "setPreset": "174138",
+  "token_transfer": "46401",
+  "transferOwnership": "51620",
+  "v4_swap_testRouter": "162148"
+}
