@@ -50,6 +50,9 @@ via_ir = false
 # so the TS SDK can predict token and curve addresses.
 bytecode_hash = "none"
 cbor_metadata = false
+# Sources embedded verbatim in the metadata, as Monad's verification guide recommends (MonadVision/Sourcify and
+# Monadscan). Metadata never reaches the bytecode here (no CBOR), so init-code hashes are unaffected.
+use_literal_content = true
 
 # --- Execution / tests --------------------------------------------------------
 network = "monad"

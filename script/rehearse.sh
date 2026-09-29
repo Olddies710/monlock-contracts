@@ -65,6 +65,10 @@ mine 200 # anti-snipe window (~80 s on Monad)
 forge script script/SmokeLaunch.s.sol --sig "graduate(address)" "$TOKEN" "${BROADCAST[@]}" | grep -E '^  (buying|graduated)'
 forge script script/SmokeLaunch.s.sol --sig "claim(address)" "$TOKEN" "${BROADCAST[@]}" | grep -E '^  curve fees'
 
+step "Verification commands (dry run: the node is local)"
+DRY_RUN=1 ./script/verify.sh 31337 | sed -E 's/(--constructor-args 0x)[0-9a-f]+/\1…/'
+DRY_RUN=1 RPC_URL="$RPC" ./script/verify.sh 31337 "$TOKEN"
+
 step "Gas per transaction (Monad bills the limit)"
 printf '%-18s %-26s %12s %12s\n' contract function gasUsed gasLimit
 for f in Deploy.s.sol/31337/run SmokeLaunch.s.sol/31337/launch SmokeLaunch.s.sol/31337/trade \
