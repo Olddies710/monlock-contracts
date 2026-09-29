@@ -5,7 +5,7 @@ import {BondingCurveMath} from "../../src/libraries/BondingCurveMath.sol";
 import {FeeSplit, LaunchPreset} from "../../src/types/LaunchpadTypes.sol";
 
 /// @notice Approved launch parameters (ARCHITECTURE.md §4.6, §5.2, §7.1). Shared by deployment scripts
-///         (`ComputePreset`, and the Phase 4 deploy script) and by the test suite as its oracle.
+///         (`ComputePreset`, `Deploy`, `CheckDeployment`) and by the test suite as its oracle.
 library Presets {
     uint256 internal constant TOTAL_SUPPLY = 1_000_000_000e18;
     uint256 internal constant CURVE_SUPPLY = 800_000_000e18;
@@ -23,6 +23,12 @@ library Presets {
     uint256 internal constant EXPECTED_VM0 = 714_285_714_285_714_285_715;
 
     uint32 internal constant DEFAULT_PRESET_ID = 1;
+
+    /// @dev Testnet-only smoke preset (never registered on mainnet, see `Deploy`): same supply split, fees and
+    ///      anti-snipe as preset 1, but it graduates at 1 MON, so the whole lifecycle (launch, anti-snipe window,
+    ///      atomic graduation into the real Uniswap v4 PoolManager, LP fees) fits a faucet budget.
+    uint32 internal constant SMOKE_PRESET_ID = 2;
+    uint256 internal constant SMOKE_TARGET_RAISE = 1 ether;
 
     function defaultPreset(address migrator) internal pure returns (LaunchPreset memory p) {
         (uint256 vT0, uint256 vM0) =
@@ -42,5 +48,14 @@ library Presets {
         p.maxDevBuyBps = MAX_DEV_BUY_BPS;
         p.migrator = migrator;
         p.enabled = true;
+    }
+
+    /// @dev `vT0` only depends on (C, L, g), so only `vM0` changes with the smaller target raise.
+    function smokePreset(address migrator) internal pure returns (LaunchPreset memory p) {
+        p = defaultPreset(migrator);
+        (uint256 vT0, uint256 vM0) =
+            BondingCurveMath.deriveVirtualReserves(CURVE_SUPPLY, LP_SUPPLY, SMOKE_TARGET_RAISE, GRADUATION_FEE_BPS);
+        p.virtualTokenReserve0 = uint128(vT0);
+        p.virtualMonReserve0 = uint128(vM0);
     }
 }

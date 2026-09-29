@@ -11,15 +11,12 @@ import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {FixedPointMathLib as FPML} from "solady/utils/FixedPointMathLib.sol";
 
-import {MigratorDefaults, MonadMainnet, MonadNetwork, MonadNetworks} from "../../script/config/MonadAddresses.sol";
+import {MigratorDefaults, MonadNetwork, MonadNetworks} from "../../script/config/MonadAddresses.sol";
 import {Presets} from "../../script/config/Presets.sol";
-import {HookMiner} from "../../script/utils/HookMiner.sol";
 import {BondingCurveManager} from "../../src/BondingCurveManager.sol";
-import {LaunchToken} from "../../src/LaunchToken.sol";
-import {LiquidityMigrator} from "../../src/LiquidityMigrator.sol";
 import {ILiquidityMigrator} from "../../src/interfaces/ILiquidityMigrator.sol";
 import {BondingCurveMath} from "../../src/libraries/BondingCurveMath.sol";
-import {CreateParams, CurveStatus} from "../../src/types/LaunchpadTypes.sol";
+import {CurveStatus} from "../../src/types/LaunchpadTypes.sol";
 import {RejectingRecipient} from "../utils/Mocks.sol";
 import {MonadForkTest} from "./MonadForkTest.sol";
 
@@ -243,35 +240,6 @@ abstract contract LiquidityMigratorForkTest is MonadForkTest {
         assertEq(address(rejecting).balance, mon * 7000 / 10_000, "forced payment");
     }
 
-    // ------------------------------------------------------------------ production deployment path
-
-    /// @notice Mined CREATE2 deployment through the Arachnid deployer on Monad, registered as a new preset, and a
-    ///         launch graduating through it.
-    function test_minedMigrator_deployedViaCreate2_graduates() public {
-        bytes memory initCode = abi.encodePacked(
-            type(LiquidityMigrator).creationCode,
-            abi.encode(poolManager, address(factory), MigratorDefaults.LP_FEE, MigratorDefaults.TICK_SPACING)
-        );
-        vm.pauseGasMetering();
-        (bytes32 salt, address predicted) =
-            HookMiner.find(MonadMainnet.CREATE2_DEPLOYER, Hooks.BEFORE_INITIALIZE_FLAG, initCode, 0);
-        vm.resumeGasMetering();
-        (bool ok,) = MonadMainnet.CREATE2_DEPLOYER.call(abi.encodePacked(salt, initCode));
-        assertTrue(ok);
-        assertGt(predicted.code.length, 0);
-
-        vm.prank(owner);
-        factory.setPreset(2, Presets.defaultPreset(predicted));
-        (address t, address c) = factory.createToken(_paramsWithPreset(bytes32("mined"), 2));
-        token = LaunchToken(t);
-        curve = BondingCurveManager(c);
-        migrator = LiquidityMigrator(payable(predicted));
-
-        _graduate();
-        assertEq(uint8(curve.state().status), uint8(CurveStatus.Graduated));
-        assertGt(migrator.positionOf(t).liquidity, 0);
-    }
-
     // ------------------------------------------------------------------ fuzz: donations keep price continuity
 
     /// @dev Body of the per-network fuzz test (inline fuzz config only applies where the test is declared).
@@ -297,13 +265,6 @@ abstract contract LiquidityMigratorForkTest is MonadForkTest {
         assertEq(address(migrator).balance, 0);
         assertEq(token.balanceOf(address(migrator)), 0);
         assertEq(token.balanceOf(address(curve)), 0);
-    }
-
-    // ------------------------------------------------------------------ helpers
-
-    function _paramsWithPreset(bytes32 salt, uint32 presetId) internal view returns (CreateParams memory p) {
-        p = _params(salt);
-        p.presetId = presetId;
     }
 }
 

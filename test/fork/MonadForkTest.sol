@@ -2,11 +2,12 @@
 pragma solidity ^0.8.24;
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {Test} from "forge-std/Test.sol";
 
-import {MigratorDefaults, MonadNetwork} from "../../script/config/MonadAddresses.sol";
+import {Deploy} from "../../script/Deploy.s.sol";
+import {MigratorDefaults, MonadMainnet, MonadNetwork} from "../../script/config/MonadAddresses.sol";
 import {Presets} from "../../script/config/Presets.sol";
+import {DeployConfig, Deployment} from "../../script/utils/DeploymentLib.sol";
 import {BondingCurveManager} from "../../src/BondingCurveManager.sol";
 import {LaunchToken} from "../../src/LaunchToken.sol";
 import {LiquidityMigrator} from "../../src/LiquidityMigrator.sol";
@@ -14,15 +15,16 @@ import {TokenFactory} from "../../src/TokenFactory.sol";
 import {CreateParams} from "../../src/types/LaunchpadTypes.sol";
 import {V4TestRouter} from "../utils/V4TestRouter.sol";
 
-/// @notice Fork-first fixture (approved Phase 0 decision): the full launchpad deployed on a fork of a Monad network
-///         (mainnet 143 or testnet 10143) at a pinned block, graduating into that network's real Uniswap v4
-///         PoolManager. Needs the network's RPC variable (`MONAD_RPC_URL` / `MONAD_TESTNET_RPC_URL`); without it
-///         every test of the suite is skipped.
+/// @notice Fork-first fixture (approved Phase 0 decision): the launchpad deployed by the production `Deploy` script
+///         (CREATE2 factory, mined hook address, presets) on a fork of a Monad network (mainnet 143 or testnet
+///         10143) at a pinned block, graduating into that network's real Uniswap v4 PoolManager. Needs the network's
+///         RPC variable (`MONAD_RPC_URL` / `MONAD_TESTNET_RPC_URL`); without it every test of the suite is skipped.
 abstract contract MonadForkTest is Test {
     uint32 internal constant PRESET_ID = Presets.DEFAULT_PRESET_ID;
 
     MonadNetwork internal network;
     IPoolManager internal poolManager;
+    Deployment internal deployment;
 
     TokenFactory internal factory;
     LiquidityMigrator internal migrator;
@@ -54,10 +56,13 @@ abstract contract MonadForkTest is Test {
         poolManager = IPoolManager(network.poolManager);
         forked = true;
 
-        factory = new TokenFactory(owner, treasury);
-        migrator = _deployMigrator(hookAddress("launchpad.migrator"));
-        vm.prank(owner);
-        factory.setPreset(PRESET_ID, Presets.defaultPreset(address(migrator)));
+        // The script contract embeds ~85 KB of creation code; its own deployment is not part of what we measure.
+        vm.pauseGasMetering();
+        Deploy script = Deploy(deployCode("Deploy.s.sol:Deploy"));
+        vm.resumeGasMetering();
+        deployment = script.deploy(_deployConfig(), owner);
+        factory = TokenFactory(deployment.factory);
+        migrator = LiquidityMigrator(payable(deployment.migrator));
         (address t, address c) = factory.createToken(_params(bytes32("fork")));
         token = LaunchToken(t);
         curve = BondingCurveManager(c);
@@ -68,19 +73,14 @@ abstract contract MonadForkTest is Test {
         vm.deal(whale, 100_000 ether);
     }
 
-    /// @dev An address carrying exactly the BEFORE_INITIALIZE flag, derived from `label`.
-    function hookAddress(string memory label) internal pure returns (address) {
-        return
-            address((uint160(uint256(keccak256(bytes(label)))) & ~Hooks.ALL_HOOK_MASK) | Hooks.BEFORE_INITIALIZE_FLAG);
-    }
-
-    function _deployMigrator(address target) internal returns (LiquidityMigrator) {
-        deployCodeTo(
-            "LiquidityMigrator.sol:LiquidityMigrator",
-            abi.encode(poolManager, address(factory), MigratorDefaults.LP_FEE, MigratorDefaults.TICK_SPACING),
-            target
-        );
-        return LiquidityMigrator(payable(target));
+    /// @dev Production parameters; `owner` deploys and keeps ownership (no Safe handoff in the fixture).
+    function _deployConfig() internal view returns (DeployConfig memory cfg) {
+        cfg.poolManager = network.poolManager;
+        cfg.treasury = treasury;
+        cfg.lpFee = MigratorDefaults.LP_FEE;
+        cfg.tickSpacing = MigratorDefaults.TICK_SPACING;
+        cfg.factorySalt = keccak256("launchpad.fork");
+        cfg.smokePreset = network.chainId != MonadMainnet.CHAIN_ID;
     }
 
     function _params(bytes32 salt) internal view returns (CreateParams memory p) {
