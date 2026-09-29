@@ -19,9 +19,18 @@ import {DeployConfig, Deployment, DeploymentLib} from "./utils/DeploymentLib.sol
 ///         Idempotent: steps already on-chain are skipped, so a run that failed halfway can simply be repeated.
 ///
 ///         Environment: PROTOCOL_TREASURY (required), FINAL_OWNER, POOL_MANAGER (defaults to the network's),
-///         LP_FEE, TICK_SPACING, FACTORY_SALT, MIGRATOR_SALT_START, SMOKE_PRESET (defaults to true off mainnet).
+///         LP_FEE, TICK_SPACING, FACTORY_SALT, MIGRATOR_SALT_START, SMOKE_PRESET (defaults to true off mainnet),
+///         CONTRACTS_ONLY.
+///
+///         Live networks: two broadcasts. Against a Monad RPC, forge's gas estimate for a call into a contract
+///         created earlier in the same run is taken as if that contract did not exist yet (setPreset estimated at
+///         ~30k for ~175k used), so those transactions would run out of gas. Phase 1 (CONTRACTS_ONLY=true) creates
+///         the contracts; phase 2 (the same command without it) finds them on-chain, skips their creation and
+///         configures them with correct estimates.
 /// @dev    forge script script/Deploy.s.sol --rpc-url monad_testnet --account deployer            # simulation
-///         forge script script/Deploy.s.sol --rpc-url monad_testnet --account deployer --broadcast --slow
+///         CONTRACTS_ONLY=true forge script script/Deploy.s.sol --rpc-url monad_testnet --account deployer \
+///           --broadcast --slow                                                                  # phase 1
+///         forge script script/Deploy.s.sol --rpc-url monad_testnet --account deployer --broadcast --slow # 2
 ///      A broadcast writes `deployments/<chainId>.json`; a simulation writes `deployments/dry-run/` (gitignored).
 contract Deploy is Script {
     bytes32 public constant DEFAULT_FACTORY_SALT = keccak256("monad-launchpad.factory.v1");
@@ -60,6 +69,7 @@ contract Deploy is Script {
         cfg.factorySalt = DeploymentLib.envBytes32("FACTORY_SALT", DEFAULT_FACTORY_SALT);
         cfg.migratorSaltStart = DeploymentLib.envUint("MIGRATOR_SALT_START", uint256(0));
         cfg.smokePreset = DeploymentLib.envBool("SMOKE_PRESET", block.chainid != MonadMainnet.CHAIN_ID);
+        cfg.contractsOnly = DeploymentLib.envBool("CONTRACTS_ONLY", false);
     }
 
     /// @notice Deploys (or completes) the deployment described by `cfg`, broadcasting from `deployer`.
@@ -80,7 +90,9 @@ contract Deploy is Script {
         );
 
         TokenFactory factory = TokenFactory(d.factory);
-        if (factory.owner() == deployer) {
+        if (cfg.contractsOnly) {
+            console.log("CONTRACTS_ONLY: presets and ownership are configured by the next run");
+        } else if (factory.owner() == deployer) {
             _setPreset(factory, Presets.DEFAULT_PRESET_ID, Presets.defaultPreset(d.migrator));
             if (cfg.smokePreset) _setPreset(factory, Presets.SMOKE_PRESET_ID, Presets.smokePreset(d.migrator));
             if (cfg.finalOwner != address(0) && cfg.finalOwner != deployer && factory.pendingOwner() != cfg.finalOwner)

@@ -21,6 +21,7 @@ struct DeployConfig {
     bytes32 factorySalt; // CREATE2 salt of the factory
     uint256 migratorSaltStart; // first salt of the hook-address search
     bool smokePreset; // also register the testnet smoke preset (refused on mainnet)
+    bool contractsOnly; // phase 1 of a live deployment: create the contracts, configure nothing (see Deploy)
 }
 
 /// @notice A deployment as recorded in `deployments/<chainId>.json`. With the source tree it is enough to re-derive

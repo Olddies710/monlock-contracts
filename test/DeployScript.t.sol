@@ -85,6 +85,24 @@ contract DeployScriptTest is Test {
         assertGt(uint256(_minedSalt(cfg, d.factory, cfg.migratorSaltStart)), uint256(d.migratorSalt));
     }
 
+    /// @notice Two-phase live deployment: phase 1 only creates, phase 2 configures what phase 1 left.
+    function test_deploy_contractsOnlyThenConfigure() public {
+        DeployConfig memory cfg = _config();
+        cfg.contractsOnly = true;
+        Deployment memory d = script.deploy(cfg, deployer);
+        assertGt(d.factory.code.length, 0);
+        assertGt(d.migrator.code.length, 0);
+        assertFalse(TokenFactory(d.factory).preset(Presets.DEFAULT_PRESET_ID).enabled, "not configured yet");
+        assertEq(TokenFactory(d.factory).pendingOwner(), address(0));
+
+        cfg.contractsOnly = false;
+        vm.recordLogs();
+        Deployment memory d2 = script.deploy(cfg, deployer);
+        assertEq(d2.factory, d.factory);
+        assertEq(vm.getRecordedLogs().length, 3, "two presets and the ownership transfer, no creation");
+        assertEq(checker.check(d2).failures, 0);
+    }
+
     function test_deploy_isIdempotent() public {
         Deployment memory first = script.deploy(_config(), deployer);
         vm.recordLogs();
@@ -234,7 +252,9 @@ contract DeployScriptTest is Test {
         vm.setEnv("FACTORY_SALT", vm.toString(bytes32(uint256(7))));
         vm.setEnv("MIGRATOR_SALT_START", "1000");
         vm.setEnv("SMOKE_PRESET", "false");
+        vm.setEnv("CONTRACTS_ONLY", "true");
         cfg = script.configFromEnv();
+        assertTrue(cfg.contractsOnly);
         assertEq(cfg.treasury, treasury);
         assertEq(cfg.finalOwner, safe);
         assertEq(cfg.lpFee, 3000);
@@ -299,7 +319,7 @@ contract DeployScriptTest is Test {
     }
 
     function _clearEnv() internal {
-        string[8] memory names = [
+        string[9] memory names = [
             "POOL_MANAGER",
             "PROTOCOL_TREASURY",
             "FINAL_OWNER",
@@ -307,7 +327,8 @@ contract DeployScriptTest is Test {
             "TICK_SPACING",
             "FACTORY_SALT",
             "MIGRATOR_SALT_START",
-            "SMOKE_PRESET"
+            "SMOKE_PRESET",
+            "CONTRACTS_ONLY"
         ];
         for (uint256 i; i < names.length; ++i) {
             vm.setEnv(names[i], "");

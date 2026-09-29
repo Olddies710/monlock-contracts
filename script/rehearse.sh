@@ -39,8 +39,11 @@ mine() { cast rpc anvil_mine "$(printf '0x%x' "$1")" --rpc-url "$RPC" >/dev/null
 export POOL_MANAGER="$TESTNET_POOL_MANAGER" PROTOCOL_TREASURY="$TREASURY" FINAL_OWNER="$SAFE"
 BROADCAST=(--rpc-url "$RPC" --broadcast --slow --unlocked --sender "$DEPLOYER" --gas-estimate-multiplier "$GAS_MULTIPLIER")
 
-step "Deploy (simulation, then broadcast)"
+step "Deploy (simulation, then phase 1: contracts, phase 2: configuration)"
+# Two phases as on a live network (DEPLOYMENT.md §5.2). anvil does not enforce the gas limit of the mis-estimated
+# calls, so a single run would pass here and still fail on Monad.
 forge script script/Deploy.s.sol --rpc-url "$RPC" --sender "$DEPLOYER" >/dev/null
+CONTRACTS_ONLY=true forge script script/Deploy.s.sol "${BROADCAST[@]}" | grep -E 'CONTRACTS_ONLY'
 forge script script/Deploy.s.sol "${BROADCAST[@]}" | grep -E '^  (==|  [A-Za-z])|next:'
 
 step "CheckDeployment (handoff pending: 1 warning)"

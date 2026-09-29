@@ -1,0 +1,18 @@
+{
+  "chainId": 10143,
+  "create2Deployer": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+  "curveInitCodeHash": "0xadc7aedfcdd83bdfe95c77f91f46322a9818285d5b1b09d1370cdd3f4616d7c8",
+  "deployer": "0x6D12ee06d3D65a28e497832a1d1f1a3bF187aeCA",
+  "factory": "0xabA8c2Abe15c505b8A229B9Dda60A6695B983aD3",
+  "factorySalt": "0x5f91dbe8dddeec034311535c1070dc94e3f509cf2a3f414109014fcf87dc8b4b",
+  "finalOwner": "0x0000000000000000000000000000000000000000",
+  "initialTreasury": "0x2B168f717380dB8F51CfF2a1f43eBCD6De26e8c3",
+  "lpFee": 10000,
+  "migrator": "0xC886493Bd1FF2Fc9496733aA6BB8e6500C22e000",
+  "migratorSalt": "0x00000000000000000000000000000000000000000000000000000000000061b0",
+  "poolManager": "0x451D64ab3b650040d2aE1886602b97ed6eDc643d",
+  "smokePreset": true,
+  "startBlock": 66771465,
+  "tickSpacing": 200,
+  "tokenInitCodeHash": "0x35212c18dc62661491ab5b0ea6fdca2363efc9fa7c390e13eb8c924275580a94"
+}
