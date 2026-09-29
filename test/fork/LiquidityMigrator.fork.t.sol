@@ -11,7 +11,7 @@ import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {FixedPointMathLib as FPML} from "solady/utils/FixedPointMathLib.sol";
 
-import {MigratorDefaults, MonadMainnet} from "../../script/config/MonadAddresses.sol";
+import {MigratorDefaults, MonadMainnet, MonadNetwork, MonadNetworks} from "../../script/config/MonadAddresses.sol";
 import {Presets} from "../../script/config/Presets.sol";
 import {HookMiner} from "../../script/utils/HookMiner.sol";
 import {BondingCurveManager} from "../../src/BondingCurveManager.sol";
@@ -23,8 +23,9 @@ import {CreateParams, CurveStatus} from "../../src/types/LaunchpadTypes.sol";
 import {RejectingRecipient} from "../utils/Mocks.sol";
 import {MonadForkTest} from "./MonadForkTest.sol";
 
-/// @notice Graduation into the real Uniswap v4 PoolManager on a Monad mainnet fork (ARCHITECTURE.md §2.3, §4.8).
-contract LiquidityMigratorForkTest is MonadForkTest {
+/// @notice Graduation into the real Uniswap v4 PoolManager on a Monad fork (ARCHITECTURE.md §2.3, §4.8). Runs against
+///         mainnet and testnet: their PoolManagers are different builds of v4.
+abstract contract LiquidityMigratorForkTest is MonadForkTest {
     using StateLibrary for *;
 
     uint256 internal constant Q192 = 1 << 192;
@@ -33,7 +34,7 @@ contract LiquidityMigratorForkTest is MonadForkTest {
     // ------------------------------------------------------------------ graduation
 
     function test_graduation_locksFullRangeLiquidityAtTheCurvePrice() public {
-        uint256 pmMonBefore = address(POOL_MANAGER).balance;
+        uint256 pmMonBefore = address(poolManager).balance;
         uint256 realMon = _graduate();
 
         uint256 vTFinal = Presets.EXPECTED_VT0 - Presets.CURVE_SUPPLY;
@@ -46,13 +47,13 @@ contract LiquidityMigratorForkTest is MonadForkTest {
         // Pool opened at floor(sqrt(tokens / MON)) and never below the curve's final MON price.
         ILiquidityMigrator.LockedPosition memory position = migrator.positionOf(address(token));
         PoolId poolId = PoolId.wrap(position.poolId);
-        (uint160 sqrtPriceX96,,, uint24 fee) = POOL_MANAGER.getSlot0(poolId);
+        (uint160 sqrtPriceX96,,, uint24 fee) = poolManager.getSlot0(poolId);
         assertEq(sqrtPriceX96, FPML.sqrt(FPML.fullMulDiv(tokensLP, Q192, monLP)), "opening price");
         assertLe(sqrtPriceX96, FPML.sqrt(FPML.fullMulDiv(vTFinal, Q192, vMFinal)), "DEX price >= curve price");
         assertEq(fee, MigratorDefaults.LP_FEE);
 
         // The migrator owns the full-range position directly in the PoolManager.
-        (uint128 liquidity,,) = POOL_MANAGER.getPositionInfo(
+        (uint128 liquidity,,) = poolManager.getPositionInfo(
             poolId,
             address(migrator),
             TickMath.minUsableTick(MigratorDefaults.TICK_SPACING),
@@ -61,18 +62,18 @@ contract LiquidityMigratorForkTest is MonadForkTest {
         );
         assertGt(liquidity, 0);
         assertEq(liquidity, position.liquidity);
-        assertEq(POOL_MANAGER.getLiquidity(poolId), liquidity, "sole LP at launch");
+        assertEq(poolManager.getLiquidity(poolId), liquidity, "sole LP at launch");
         assertEq(position.curve, address(curve));
         assertEq(position.graduationBlock, block.number);
 
         // Nothing stays in the curve or the migrator; dust goes to the treasury (MON) or is burned (tokens).
-        uint256 monInPool = address(POOL_MANAGER).balance - pmMonBefore;
+        uint256 monInPool = address(poolManager).balance - pmMonBefore;
         assertEq(monInPool + treasury.balance, monLP, "MON: pool + dust");
         assertLt(treasury.balance, 1e9, "only rounding dust");
         assertEq(address(migrator).balance, 0);
         assertEq(token.balanceOf(address(migrator)), 0);
         assertEq(token.balanceOf(address(curve)), 0);
-        uint256 tokensInPool = token.balanceOf(address(POOL_MANAGER));
+        uint256 tokensInPool = token.balanceOf(address(poolManager));
         assertLe(tokensInPool, tokensLP);
         assertEq(token.totalSupply(), Presets.CURVE_SUPPLY + tokensInPool, "unused LP reserve and dust burned");
     }
@@ -146,14 +147,14 @@ contract LiquidityMigratorForkTest is MonadForkTest {
         );
         vm.prank(alice);
         vm.expectRevert(wrapped);
-        POOL_MANAGER.initialize(key, TickMath.getSqrtPriceAtTick(0));
+        poolManager.initialize(key, TickMath.getSqrtPriceAtTick(0));
 
         // Any other pool using this hook is blocked too (different fee tier).
         key.fee = 500;
         key.tickSpacing = 10;
         vm.prank(alice);
         vm.expectRevert();
-        POOL_MANAGER.initialize(key, TickMath.getSqrtPriceAtTick(0));
+        poolManager.initialize(key, TickMath.getSqrtPriceAtTick(0));
     }
 
     function test_poolPoisoning_siblingPoolsCannotDerailGraduation() public {
@@ -166,7 +167,7 @@ contract LiquidityMigratorForkTest is MonadForkTest {
             hooks: IHooks(address(0))
         });
         vm.prank(alice);
-        POOL_MANAGER.initialize(sibling, TickMath.getSqrtPriceAtTick(0));
+        poolManager.initialize(sibling, TickMath.getSqrtPriceAtTick(0));
 
         _graduate();
         assertEq(uint8(curve.state().status), uint8(CurveStatus.Graduated), "canonical pool is ours");
@@ -249,7 +250,7 @@ contract LiquidityMigratorForkTest is MonadForkTest {
     function test_minedMigrator_deployedViaCreate2_graduates() public {
         bytes memory initCode = abi.encodePacked(
             type(LiquidityMigrator).creationCode,
-            abi.encode(POOL_MANAGER, address(factory), MigratorDefaults.LP_FEE, MigratorDefaults.TICK_SPACING)
+            abi.encode(poolManager, address(factory), MigratorDefaults.LP_FEE, MigratorDefaults.TICK_SPACING)
         );
         vm.pauseGasMetering();
         (bytes32 salt, address predicted) =
@@ -273,9 +274,8 @@ contract LiquidityMigratorForkTest is MonadForkTest {
 
     // ------------------------------------------------------------------ fuzz: donations keep price continuity
 
-    /// forge-config: default.fuzz.runs = 32
-    /// forge-config: ci.fuzz.runs = 256
-    function testFuzz_graduation_priceContinuousWithSnipeDonations(uint256 seed) public {
+    /// @dev Body of the per-network fuzz test (inline fuzz config only applies where the test is declared).
+    function _checkPriceContinuityWithSnipeDonations(uint256 seed) internal {
         // Taxed buys inside the anti-snipe window donate MON to the reserve before the sell-out.
         for (uint256 i; i < 6; ++i) {
             uint256 r = uint256(keccak256(abi.encode(seed, i)));
@@ -292,7 +292,7 @@ contract LiquidityMigratorForkTest is MonadForkTest {
         uint256 vTFinal = Presets.EXPECTED_VT0 - Presets.CURVE_SUPPLY;
         uint256 vMFinal = Presets.EXPECTED_VM0 + realMon;
         PoolId poolId = PoolId.wrap(migrator.positionOf(address(token)).poolId);
-        (uint160 sqrtPriceX96,,,) = POOL_MANAGER.getSlot0(poolId);
+        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
         assertLe(sqrtPriceX96, FPML.sqrt(FPML.fullMulDiv(vTFinal, Q192, vMFinal)), "DEX price >= curve price");
         assertEq(address(migrator).balance, 0);
         assertEq(token.balanceOf(address(migrator)), 0);
@@ -304,5 +304,29 @@ contract LiquidityMigratorForkTest is MonadForkTest {
     function _paramsWithPreset(bytes32 salt, uint32 presetId) internal view returns (CreateParams memory p) {
         p = _params(salt);
         p.presetId = presetId;
+    }
+}
+
+contract LiquidityMigratorMainnetForkTest is LiquidityMigratorForkTest {
+    function _network() internal pure override returns (MonadNetwork memory) {
+        return MonadNetworks.mainnet();
+    }
+
+    /// forge-config: default.fuzz.runs = 32
+    /// forge-config: ci.fuzz.runs = 256
+    function testFuzz_graduation_priceContinuousWithSnipeDonations(uint256 seed) public {
+        _checkPriceContinuityWithSnipeDonations(seed);
+    }
+}
+
+contract LiquidityMigratorTestnetForkTest is LiquidityMigratorForkTest {
+    function _network() internal pure override returns (MonadNetwork memory) {
+        return MonadNetworks.testnet();
+    }
+
+    /// forge-config: default.fuzz.runs = 32
+    /// forge-config: ci.fuzz.runs = 256
+    function testFuzz_graduation_priceContinuousWithSnipeDonations(uint256 seed) public {
+        _checkPriceContinuityWithSnipeDonations(seed);
     }
 }
