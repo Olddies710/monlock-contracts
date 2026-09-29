@@ -62,3 +62,39 @@ contract V4TestRouter is IUnlockCallback {
 
     receive() external payable {}
 }
+
+/// @notice Adds liquidity to a (native MON, ERC-20) Uniswap v4 pool for fork tests: pays exactly what the PoolManager
+///         asks for, MON from this contract's balance and the ERC-20 from its own inventory.
+contract V4LiquidityProvider is IUnlockCallback {
+    using SafeTransferLib for address;
+
+    IPoolManager public immutable manager;
+
+    constructor(IPoolManager manager_) {
+        manager = manager_;
+    }
+
+    function addLiquidity(PoolKey memory key, int24 tickLower, int24 tickUpper, uint256 liquidity) external {
+        manager.unlock(abi.encode(key, tickLower, tickUpper, liquidity));
+    }
+
+    function unlockCallback(bytes calldata data) external returns (bytes memory) {
+        require(msg.sender == address(manager), "only manager");
+        (PoolKey memory key, int24 tickLower, int24 tickUpper, uint256 liquidity) =
+            abi.decode(data, (PoolKey, int24, int24, uint256));
+        (BalanceDelta delta,) = manager.modifyLiquidity(
+            key,
+            IPoolManager.ModifyLiquidityParams({
+                tickLower: tickLower, tickUpper: tickUpper, liquidityDelta: int256(liquidity), salt: bytes32(0)
+            }),
+            ""
+        );
+        manager.settle{value: uint256(-int256(delta.amount0()))}();
+        manager.sync(key.currency1);
+        Currency.unwrap(key.currency1).safeTransfer(address(manager), uint256(-int256(delta.amount1())));
+        manager.settle();
+        return "";
+    }
+
+    receive() external payable {}
+}

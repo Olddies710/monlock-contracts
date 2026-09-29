@@ -44,6 +44,8 @@ interface IBondingCurveManager {
     event MigrationFailed(bytes reason);
 
     event FeesClaimed(uint256 toCreator, uint256 toProtocol);
+    /// @notice Stock share of the curve fees paid to this launch's StockReserve (stock-reserve launches only, §7.4).
+    event StockFeesClaimed(address indexed stockReserve, uint256 amount);
     event ReferrerFeesClaimed(address indexed referrer, uint256 amount);
     event CreatorFeeRecipientUpdated(address indexed recipient);
 
@@ -120,11 +122,14 @@ interface IBondingCurveManager {
     /// @notice MON owed to the creator and to the protocol. The protocol is the residual claimant.
     function claimableFees() external view returns (uint256 toCreator, uint256 toProtocol);
 
+    /// @notice MON owed to the StockReserve (always 0 on a default MON launch). Paid by `claimFees`.
+    function claimableStockFees() external view returns (uint256);
+
     /// @notice MON owed to `referrer` on this curve.
     function referrerFees(address referrer) external view returns (uint256);
 
-    /// @notice Pays the creator and the protocol what they are owed. Callable by anyone; a reverting recipient
-    ///         cannot block the other (forced transfer).
+    /// @notice Pays the creator, the protocol and, on a stock-reserve launch, the StockReserve what they are owed.
+    ///         Callable by anyone; a reverting recipient cannot block the others (forced transfer).
     function claimFees() external;
 
     /// @notice Pays `referrer` what it is owed on this curve. Callable by anyone (funds only go to `referrer`).
@@ -144,6 +149,13 @@ interface IBondingCurveManager {
     function creator() external view returns (address);
 
     function creatorFeeRecipient() external view returns (address);
+
+    /// @notice StockReserve of this launch, or address(0) on a default MON launch (ARCHITECTURE.md §7.4).
+    function stockReserve() external view returns (address);
+
+    /// @notice Share of the curve fees (bps of each fee) paid to `stockReserve`. `feeParams().curveFeeSplit`
+    ///         reports the protocol share net of it, so creator + protocol + referrer + stock = 10_000.
+    function stockFeeBps() external view returns (uint256);
 
     /// @notice Block of the creation transaction. Anti-snipe decay is measured in blocks from here because
     ///         Monad's block.timestamp has 1 s resolution (3-4 blocks share the same timestamp).

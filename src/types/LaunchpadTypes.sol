@@ -63,6 +63,34 @@ struct CurveDeployParams {
     address token;
     address creator;
     LaunchPreset preset;
+    // --- Optional stock reserve (ARCHITECTURE.md §7.4). Both zero for a default MON launch.
+    address stockReserve; // StockReserve instance of this launch
+    uint16 stockFeeBps; // share of the curve fees paid to it, carved out of preset.curveFeeSplit.protocolBps
+}
+
+/// @notice A stock accepted by the factory for stock-reserve launches (owner-curated allowlist, §7.4).
+/// @dev Purchases go through a Uniswap v4 pool (native MON, stock) without hooks, identified by its key fields.
+///      A listing is copied into each StockReserve at creation: delisting or re-listing only affects future launches.
+struct StockListing {
+    bytes32 symbol; // display ticker, e.g. "TSLAx"
+    address poolManager; // Uniswap v4 PoolManager holding the pool
+    uint24 poolFee; // pool key fee
+    int24 tickSpacing; // pool key tick spacing
+    uint16 maxSlippageBps; // price-impact cap of one purchase (sqrtPriceLimit of the swap)
+    uint8 decimals; // stock decimals, read from the token at listing time
+    bool listed;
+}
+
+/// @notice Immutable configuration of one StockReserve (encoded as the immutable arguments of its clone).
+struct StockReserveConfig {
+    address factory;
+    address token; // the launch token
+    address curve; // the launch curve, which pays the stock share of its fees here
+    address stock;
+    address poolManager;
+    uint24 poolFee;
+    int24 tickSpacing;
+    uint16 maxSlippageBps;
 }
 
 /// @notice Snapshot of a curve for quoting and off-chain consumers.

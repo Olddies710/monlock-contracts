@@ -31,6 +31,12 @@ contract LaunchHarness {
         protocolTreasury = treasury;
     }
 
+    /// @notice Stock-reserve fields served to the next curves (no validation: constructor-level tests).
+    function setStockParams(address stockReserve, uint16 stockFeeBps) external {
+        _curveParams.stockReserve = stockReserve;
+        _curveParams.stockFeeBps = stockFeeBps;
+    }
+
     function tokenDeployParams() external view returns (bytes32, bytes32, address, uint256) {
         if (!_deploying) revert NotDeploying();
         return (_packedName, _packedSymbol, _curve, _supply);

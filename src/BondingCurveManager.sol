@@ -22,6 +22,8 @@ import {CurveDeployParams, CurveState, CurveStatus, FeeSplit, LaunchPreset} from
 ///      (128-slot pages), so a trade pays one cold page access for the whole curve state. Parameters are
 ///      immutables (bytecode, no SLOAD). The reentrancy lock uses transient storage on every chain.
 ///      The only storage outside page 0 is the per-referrer fee ledger, touched only by referred trades.
+///      Stock-reserve launches (§7.4) add one slot, slot 5 (still page 0), written only by `claimFees`: buys and sells
+///      never touch it, and slots 0-3 keep the layout of a default MON launch.
 contract BondingCurveManager is IBondingCurveManager, ReentrancyGuardTransient {
     using SafeCastLib for uint256;
     using SafeTransferLib for address;
@@ -40,6 +42,8 @@ contract BondingCurveManager is IBondingCurveManager, ReentrancyGuardTransient {
     address public immutable creator;
     /// @inheritdoc IBondingCurveManager
     uint256 public immutable launchBlock;
+    /// @inheritdoc IBondingCurveManager
+    address public immutable stockReserve;
 
     uint256 private immutable _vT0;
     uint256 private immutable _vM0;
@@ -54,6 +58,7 @@ contract BondingCurveManager is IBondingCurveManager, ReentrancyGuardTransient {
     uint16 private immutable _lpCreatorBps;
     uint16 private immutable _lpProtocolBps;
     uint16 private immutable _lpReferrerBps;
+    uint16 private immutable _stockFeeBps;
 
     uint16 private immutable _snipeFeeBps;
     uint32 private immutable _snipeDecayBlocks;
@@ -75,6 +80,7 @@ contract BondingCurveManager is IBondingCurveManager, ReentrancyGuardTransient {
     address public creatorFeeRecipient; // slot 3
     /// @inheritdoc IBondingCurveManager
     mapping(address referrer => uint256) public referrerFees; // slot 4 (entries hash outside page 0)
+    uint128 private _stockFeesClaimed; // slot 5: stock-reserve launches only, written by `claimFees` alone
 
     // ------------------------------------------------------------------ construction
 
@@ -85,6 +91,10 @@ contract BondingCurveManager is IBondingCurveManager, ReentrancyGuardTransient {
         LaunchPreset memory preset = p.preset;
         LaunchPresetLib.validate(preset);
         if (p.token == address(0) || p.creator == address(0)) revert InvalidDeployParams();
+        // The stock share is carved out of the protocol share, so the split still sums to 10_000.
+        if (p.stockReserve == address(0)
+                ? p.stockFeeBps != 0
+                : p.stockFeeBps == 0 || p.stockFeeBps > preset.curveFeeSplit.protocolBps) revert InvalidDeployParams();
 
         uint256 totalSupply = uint256(preset.curveSupply) + preset.lpSupply;
         // The token must have minted the whole supply to this (predicted) address before we exist.
@@ -95,6 +105,7 @@ contract BondingCurveManager is IBondingCurveManager, ReentrancyGuardTransient {
         migrator = preset.migrator;
         creator = p.creator;
         launchBlock = block.number;
+        stockReserve = p.stockReserve;
 
         _vT0 = preset.virtualTokenReserve0;
         _vM0 = preset.virtualMonReserve0;
@@ -104,11 +115,12 @@ contract BondingCurveManager is IBondingCurveManager, ReentrancyGuardTransient {
         _tradeFeeBps = preset.tradeFeeBps;
         _graduationFeeBps = preset.graduationFeeBps;
         _creatorBps = preset.curveFeeSplit.creatorBps;
-        _protocolBps = preset.curveFeeSplit.protocolBps;
+        _protocolBps = preset.curveFeeSplit.protocolBps - p.stockFeeBps;
         _referrerBps = preset.curveFeeSplit.referrerBps;
         _lpCreatorBps = preset.lpFeeSplit.creatorBps;
         _lpProtocolBps = preset.lpFeeSplit.protocolBps;
         _lpReferrerBps = preset.lpFeeSplit.referrerBps;
+        _stockFeeBps = p.stockFeeBps;
 
         _snipeFeeBps = preset.snipeFeeBps;
         _snipeDecayBlocks = preset.snipeDecayBlocks;
@@ -247,26 +259,41 @@ contract BondingCurveManager is IBondingCurveManager, ReentrancyGuardTransient {
         uint256 total = _totalFeesAccrued;
         uint256 creatorEntitled = total * _creatorBps / BPS;
         toCreator = creatorEntitled - _creatorFeesClaimed;
-        // Residual claimant: unreferred shares, the graduation fee's referrer share and all rounding dust.
-        toProtocol = total - creatorEntitled - _referrerFeesAccrued - _protocolFeesClaimed;
+        // Residual claimant: unreferred shares, the graduation fee's referrer share and all rounding dust. The stock
+        // share (0 on a default MON launch) rounds down like the creator's, so its dust also lands here.
+        toProtocol = total - creatorEntitled - total * _stockFeeBps / BPS - _referrerFeesAccrued - _protocolFeesClaimed;
+    }
+
+    /// @inheritdoc IBondingCurveManager
+    function claimableStockFees() public view returns (uint256) {
+        if (_stockFeeBps == 0) return 0; // default MON launch: slot 5 is never read
+        return uint256(_totalFeesAccrued) * _stockFeeBps / BPS - _stockFeesClaimed;
     }
 
     /// @inheritdoc IBondingCurveManager
     function claimFees() external nonReentrant {
         (uint256 toCreator, uint256 toProtocol) = claimableFees();
+        uint256 toStock = claimableStockFees();
         address treasury = ITokenFactory(factory).protocolTreasury();
         // Never burn protocol fees on a misconfigured treasury: they stay claimable.
         if (treasury == address(0)) toProtocol = 0;
-        if (toCreator == 0 && toProtocol == 0) return;
+        if (toCreator == 0 && toProtocol == 0 && toStock == 0) return;
         _creatorFeesClaimed += toCreator.toUint128();
         _protocolFeesClaimed += toProtocol.toUint128();
         emit FeesClaimed(toCreator, toProtocol);
+        if (toStock != 0) {
+            _stockFeesClaimed += toStock.toUint128();
+            emit StockFeesClaimed(stockReserve, toStock);
+        }
 
-        // Destinations are fixed (creator-set recipient, factory treasury); forced sends cannot be blocked.
+        // Destinations are fixed (creator-set recipient, factory treasury, this launch's reserve); forced sends
+        // cannot be blocked.
         // forge-lint: disable-next-line(arbitrary-send-eth)
         if (toCreator != 0) creatorFeeRecipient.forceSafeTransferETH(toCreator);
         // forge-lint: disable-next-line(arbitrary-send-eth)
         if (toProtocol != 0) treasury.forceSafeTransferETH(toProtocol);
+        // forge-lint: disable-next-line(arbitrary-send-eth)
+        if (toStock != 0) stockReserve.forceSafeTransferETH(toStock);
     }
 
     /// @inheritdoc IBondingCurveManager
@@ -314,6 +341,11 @@ contract BondingCurveManager is IBondingCurveManager, ReentrancyGuardTransient {
         graduationFeeBps = _graduationFeeBps;
         curveFeeSplit = FeeSplit(_creatorBps, _protocolBps, _referrerBps);
         lpFeeSplit = FeeSplit(_lpCreatorBps, _lpProtocolBps, _lpReferrerBps);
+    }
+
+    /// @inheritdoc IBondingCurveManager
+    function stockFeeBps() external view returns (uint256) {
+        return _stockFeeBps;
     }
 
     /// @inheritdoc IBondingCurveManager
