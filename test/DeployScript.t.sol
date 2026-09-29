@@ -182,6 +182,16 @@ contract DeployScriptTest is Test {
         assertEq(checker.check(d).failures, 1, "only provenance: nothing to query");
     }
 
+    function test_check_treatsDelegatedEoaAsEoa() public {
+        vm.etch(safe, abi.encodePacked(hex"ef0100", makeAddr("delegate"))); // EIP-7702 designator
+        Deployment memory d = script.deploy(_config(), deployer);
+        vm.prank(safe);
+        TokenFactory(d.factory).acceptOwnership();
+        CheckDeployment.Result memory r = checker.check(d);
+        assertEq(r.failures, 0);
+        assertEq(r.warnings, 1, "final owner is an EOA");
+    }
+
     function test_check_flagsSmokePresetAndMissingSafeOnMainnet() public {
         DeployConfig memory cfg = _config();
         cfg.finalOwner = address(0);

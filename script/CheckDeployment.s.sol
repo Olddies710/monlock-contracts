@@ -116,7 +116,9 @@ contract CheckDeployment is Script {
             );
             _warn(r, false, "final owner has not called acceptOwnership() yet");
         }
-        _warn(r, d.finalOwner == address(0) || d.finalOwner.code.length != 0, "final owner is a contract (Safe)");
+        _warn(
+            r, d.finalOwner == address(0) || _isContract(d.finalOwner), "final owner is a contract (Safe), not an EOA"
+        );
     }
 
     // ------------------------------------------------------------------ helpers
@@ -127,6 +129,12 @@ contract CheckDeployment is Script {
         returns (bool)
     {
         return keccak256(abi.encode(factory.preset(presetId))) == keccak256(abi.encode(expected));
+    }
+
+    /// @dev EIP-7702 delegated EOAs have code too: a 23-byte designator (0xef0100 ++ delegate). They are still EOAs.
+    function _isContract(address account) private view returns (bool) {
+        bytes memory code = account.code;
+        return code.length != 0 && !(code.length == 23 && code[0] == 0xef && code[1] == 0x01 && code[2] == 0x00);
     }
 
     function _expect(Result memory r, bool ok, string memory label) private pure {
