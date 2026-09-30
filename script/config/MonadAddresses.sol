@@ -6,6 +6,7 @@ struct MonadNetwork {
     string name;
     uint256 chainId;
     address poolManager; // Uniswap v4 PoolManager
+    address universalRouter; // Uniswap Universal Router: how wallets and the web swap in graduated pools
     uint256 forkBlock; // pinned block for deterministic, cacheable fork tests
     string rpcEnv; // environment variable holding the RPC URL
 }
@@ -18,6 +19,9 @@ library MonadMainnet {
     /// @dev Uniswap v4 (developers.uniswap.org/docs/protocols/v4/deployments).
     address internal constant POOL_MANAGER = 0x188d586Ddcf52439676Ca21A244753fA19F9Ea8e;
     address internal constant POSITION_MANAGER = 0x5b7eC4a94fF9beDb700fb82aB09d5846972F4016;
+    address internal constant STATE_VIEW = 0x77395F3b2E73aE90843717371294fa97cC419D64;
+    address internal constant V4_QUOTER = 0xa222Dd357A9076d1091Ed6Aa2e16C9742dD26891;
+    address internal constant UNIVERSAL_ROUTER = 0x0D97Dc33264bfC1c226207428A79b26757fb9dc3;
 
     /// @dev Canonical contracts (docs.monad.xyz/developer-essentials/network-information).
     address internal constant WMON = 0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A;
@@ -38,6 +42,7 @@ library MonadTestnet {
     address internal constant POOL_MANAGER = 0x451D64ab3b650040d2aE1886602b97ed6eDc643d;
     address internal constant POSITION_MANAGER = 0x3Bb14E3D0Cd50aBe3EdACa06d06c29C78676C31A;
     address internal constant STATE_VIEW = 0xB639209539c61BaF67AC04876315786F8D0b153c;
+    address internal constant V4_QUOTER = 0x869834d127b230283fe63E0d0A9bEB67216a94C7;
     address internal constant UNIVERSAL_ROUTER = 0x1b7bFCd2870329B987191910D85c22C7287f3c22;
     uint256 internal constant FORK_BLOCK = 66_700_000;
 }
@@ -48,6 +53,7 @@ library MonadNetworks {
             name: "monad-mainnet",
             chainId: MonadMainnet.CHAIN_ID,
             poolManager: MonadMainnet.POOL_MANAGER,
+            universalRouter: MonadMainnet.UNIVERSAL_ROUTER,
             forkBlock: MonadMainnet.FORK_BLOCK,
             rpcEnv: "MONAD_RPC_URL"
         });
@@ -58,6 +64,7 @@ library MonadNetworks {
             name: "monad-testnet",
             chainId: MonadTestnet.CHAIN_ID,
             poolManager: MonadTestnet.POOL_MANAGER,
+            universalRouter: MonadTestnet.UNIVERSAL_ROUTER,
             forkBlock: MonadTestnet.FORK_BLOCK,
             rpcEnv: "MONAD_TESTNET_RPC_URL"
         });
