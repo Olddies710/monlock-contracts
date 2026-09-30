@@ -192,15 +192,15 @@ contract BondingCurveManagerTest is LaunchpadTest {
 
     function test_maxBuy_enforcedOnlyDuringDecay() public {
         uint256 maxBuy = curve.maxBuyAmount();
-        (uint256 out,,,) = curve.quoteBuy(20 ether);
+        (uint256 out,,,) = curve.quoteBuy(R / 100);
         assertGt(out, maxBuy);
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(IBondingCurveManager.MaxBuyExceeded.selector, out, maxBuy));
-        curve.buy{value: 20 ether}(0, address(0));
+        curve.buy{value: R / 100}(0, address(0));
 
         _rollPastSnipeWindow();
         assertEq(curve.maxBuyAmount(), type(uint256).max);
-        assertGt(_buy(alice, 20 ether), maxBuy, "no cap after the window");
+        assertGt(_buy(alice, R / 100), maxBuy, "no cap after the window");
     }
 
     // ------------------------------------------------------------------ sell
@@ -345,11 +345,11 @@ contract BondingCurveManagerTest is LaunchpadTest {
     }
 
     function test_devBuy_isCapped() public {
-        vm.deal(address(this), 100 ether);
-        uint256 out = BondingCurveMath.tokensOut(Presets.EXPECTED_VM0, Presets.EXPECTED_VT0, 99 ether);
+        vm.deal(address(this), R / 20);
+        uint256 out = BondingCurveMath.tokensOut(Presets.EXPECTED_VM0, Presets.EXPECTED_VT0, R / 20 * 99 / 100);
         uint256 cap = Presets.TOTAL_SUPPLY * Presets.MAX_DEV_BUY_BPS / 10_000;
         vm.expectRevert(abi.encodeWithSelector(IBondingCurveManager.MaxBuyExceeded.selector, out, cap));
-        factory.createToken{value: 100 ether}(_params(bytes32("dev-cap")));
+        factory.createToken{value: R / 20}(_params(bytes32("dev-cap")));
     }
 
     function test_devBuy_onlyFactoryAndOnlyFirst() public {
@@ -368,12 +368,12 @@ contract BondingCurveManagerTest is LaunchpadTest {
 
     function test_soldOut_clipsRefundsFreezesAndGraduates() public {
         _rollPastSnipeWindow();
-        uint256 monIn = 2500 ether;
+        uint256 monIn = R * 5 / 4;
         (uint256 qOut, uint256 qFee,, uint256 qRefund) = curve.quoteBuy(monIn);
         assertEq(qOut, Presets.CURVE_SUPPLY, "clipped to the remaining supply");
         uint256 monUsed = monIn - qRefund;
         uint256 realMonAtCompletion = monUsed - qFee;
-        assertGe(realMonAtCompletion, Presets.TARGET_RAISE, "R = 2,000 MON reached");
+        assertGe(realMonAtCompletion, Presets.TARGET_RAISE, "R reached");
 
         uint256 vTFinal = Presets.EXPECTED_VT0 - Presets.CURVE_SUPPLY;
         (uint256 gradFee, uint256 monLP, uint256 tokensLP) = BondingCurveMath.graduationAmounts(
@@ -415,7 +415,7 @@ contract BondingCurveManagerTest is LaunchpadTest {
 
         vm.expectEmit(address(curve));
         emit IBondingCurveManager.MigrationFailed(abi.encodeWithSelector(MockMigrator.MockMigrationFailed.selector));
-        _buy(bob, 2500 ether);
+        _buy(bob, R * 5 / 4);
 
         assertEq(uint8(_state().status), uint8(CurveStatus.Completed), "frozen, awaiting graduation");
         assertGe(_state().realMonReserve, Presets.TARGET_RAISE);

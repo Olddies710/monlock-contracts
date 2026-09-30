@@ -10,7 +10,9 @@ library Presets {
     uint256 internal constant TOTAL_SUPPLY = 1_000_000_000e18;
     uint256 internal constant CURVE_SUPPLY = 800_000_000e18;
     uint256 internal constant LP_SUPPLY = 200_000_000e18;
-    uint256 internal constant TARGET_RAISE = 2000 ether;
+    /// @dev 500,000 MON: graduation at a 2.375M MON market cap (4.75 R) with 475,000 MON of pool liquidity, the scale
+    ///      of Monad's other launchpads (ARCHITECTURE.md §11). Future launches can be re-priced with `setPreset`.
+    uint256 internal constant TARGET_RAISE = 500_000 ether;
     uint16 internal constant TRADE_FEE_BPS = 100;
     uint16 internal constant GRADUATION_FEE_BPS = 500;
     uint16 internal constant SNIPE_FEE_BPS = 5000;
@@ -20,7 +22,7 @@ library Presets {
 
     /// @dev Exact values from `deriveVirtualReserves` (cross-checked with rational arithmetic off-chain).
     uint256 internal constant EXPECTED_VT0 = 1_085_714_285_714_285_714_285_714_286;
-    uint256 internal constant EXPECTED_VM0 = 714_285_714_285_714_285_715;
+    uint256 internal constant EXPECTED_VM0 = 178_571_428_571_428_571_428_572;
 
     uint32 internal constant DEFAULT_PRESET_ID = 1;
 

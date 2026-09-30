@@ -115,7 +115,7 @@ abstract contract StockReserveForkTest is MonadForkTest {
         StockReserve reserve = StockReserve(payable(launched.stockReserve()));
         vm.roll(launched.launchBlock() + Presets.SNIPE_DECAY_BLOCKS);
         vm.prank(whale);
-        launched.buy{value: 5000 ether}(0, address(0));
+        launched.buy{value: Presets.TARGET_RAISE * 5 / 2}(0, address(0));
         assertEq(uint8(launched.state().status), uint8(CurveStatus.Graduated));
         uint128 lockedLiquidity = migrator.positionOf(t).liquidity;
 

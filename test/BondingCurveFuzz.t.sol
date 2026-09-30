@@ -12,7 +12,7 @@ contract BondingCurveFuzzTest is LaunchpadTest {
 
     function testFuzz_buy_quoteMatchesExecution(uint256 monIn, uint256 blocks) public {
         vm.roll(curve.launchBlock() + bound(blocks, 0, 400));
-        monIn = bound(monIn, 1e6, 1500 ether);
+        monIn = bound(monIn, 1e6, R * 3 / 4);
         (uint256 qOut, uint256 qFee,, uint256 qRefund) = curve.quoteBuy(monIn);
         vm.assume(qOut != 0 && qOut <= curve.maxBuyAmount());
 
@@ -20,7 +20,7 @@ contract BondingCurveFuzzTest is LaunchpadTest {
         uint256 out = _buy(alice, monIn);
 
         assertEq(out, qOut);
-        assertEq(qRefund, 0, "1,500 MON never sells out the curve");
+        assertEq(qRefund, 0, "0.75 R never sells out the curve");
         assertEq(alice.balance, aliceMon - monIn);
         CurveState memory s = _state();
         assertEq(s.realMonReserve, monIn - qFee);
@@ -30,7 +30,7 @@ contract BondingCurveFuzzTest is LaunchpadTest {
 
     function testFuzz_sell_quoteMatchesExecution(uint256 monIn, uint256 fraction, uint256 blocks) public {
         _rollPastSnipeWindow();
-        monIn = bound(monIn, 0.001 ether, 1500 ether);
+        monIn = bound(monIn, 0.001 ether, R * 3 / 4);
         uint256 bought = _buy(alice, monIn);
         vm.roll(vm.getBlockNumber() + 1 + bound(blocks, 0, 50));
         uint256 amount = bound(fraction, 1, bought);
@@ -54,7 +54,7 @@ contract BondingCurveFuzzTest is LaunchpadTest {
     ///      than was paid, whatever the point in the anti-snipe schedule.
     function testFuzz_roundTripNeverProfits(uint256 monIn, uint256 buyBlock, uint256 gap) public {
         vm.roll(curve.launchBlock() + bound(buyBlock, 0, 300));
-        monIn = bound(monIn, 1e9, 1500 ether);
+        monIn = bound(monIn, 1e9, R * 3 / 4);
         (uint256 q,,,) = curve.quoteBuy(monIn);
         vm.assume(q != 0 && q <= curve.maxBuyAmount());
 
@@ -69,12 +69,12 @@ contract BondingCurveFuzzTest is LaunchpadTest {
     /// @dev The buy that sells out the curve is clipped to the exact remaining supply and refunds the rest.
     function testFuzz_soldOutBuy_isClippedAndRefundedExactly(uint256 prior, uint256 whaleIn) public {
         _rollPastSnipeWindow();
-        prior = bound(prior, 0, 1900 ether);
+        prior = bound(prior, 0, R * 95 / 100);
         if (prior >= 1 ether) _buy(bob, prior);
         uint256 remaining = _state().realTokenReserve;
         uint256 realMonBefore = _state().realMonReserve;
 
-        whaleIn = bound(whaleIn, 2100 ether, 50_000 ether);
+        whaleIn = bound(whaleIn, R * 105 / 100, 25 * R);
         vm.deal(carol, whaleIn);
         (uint256 qOut, uint256 qFee,, uint256 qRefund) = curve.quoteBuy(whaleIn);
         uint256 out = _buy(carol, whaleIn);
@@ -103,7 +103,7 @@ contract BondingCurveFuzzTest is LaunchpadTest {
             vm.roll(vm.getBlockNumber() + r % 40);
             address who = traders[r % 3];
             if ((r >> 8) % 3 != 0) {
-                uint256 amount = bound(r >> 16, 0.01 ether, 150 ether);
+                uint256 amount = bound(r >> 16, 0.01 ether, R * 3 / 40);
                 (uint256 q,,,) = curve.quoteBuy(amount);
                 if (q == 0 || q > curve.maxBuyAmount() || q >= _state().realTokenReserve) continue;
                 vm.prank(who);
@@ -126,10 +126,10 @@ contract BondingCurveFuzzTest is LaunchpadTest {
         uint256 afterWindow = curve.launchBlock() + Presets.SNIPE_DECAY_BLOCKS;
         if (vm.getBlockNumber() < afterWindow) vm.roll(afterWindow);
         address whale = makeAddr("whale");
-        vm.deal(whale, 10_000 ether);
+        vm.deal(whale, 5 * R);
         vm.prank(whale);
-        curve.buy{value: 10_000 ether}(0, referrer);
-        monIn += 10_000 ether - whale.balance;
+        curve.buy{value: 5 * R}(0, referrer);
+        monIn += 5 * R - whale.balance;
         assertEq(uint8(_state().status), uint8(CurveStatus.Graduated));
 
         curve.claimFees();

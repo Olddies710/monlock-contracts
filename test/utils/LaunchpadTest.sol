@@ -16,6 +16,8 @@ import {MockMigrator} from "./Mocks.sol";
 abstract contract LaunchpadTest is Test {
     uint256 internal constant MONAD_CHAIN_ID = 143;
     uint32 internal constant PRESET_ID = Presets.DEFAULT_PRESET_ID;
+    /// @dev Target raise of the approved preset: trade sizes are expressed in R so the suite follows its calibration.
+    uint256 internal constant R = Presets.TARGET_RAISE;
 
     TokenFactory internal factory;
     MockMigrator internal migrator;
@@ -47,9 +49,9 @@ abstract contract LaunchpadTest is Test {
 
         (token, curve) = _launch(bytes32("default"));
 
-        vm.deal(alice, 100_000 ether);
-        vm.deal(bob, 100_000 ether);
-        vm.deal(carol, 100_000 ether);
+        vm.deal(alice, 50 * R);
+        vm.deal(bob, 50 * R);
+        vm.deal(carol, 50 * R);
     }
 
     function _params(bytes32 salt) internal view returns (CreateParams memory p) {

@@ -97,7 +97,7 @@ abstract contract LiquidityMigratorForkTest is MonadForkTest {
         _rollPastSnipeWindow();
         vm.prank(whale);
         uint256 before = gasleft();
-        curve.buy{value: 5000 ether}(0, address(0));
+        curve.buy{value: Presets.TARGET_RAISE * 5 / 2}(0, address(0));
         uint256 used = before - gasleft();
         emit log_named_uint("graduating buy gas (Monad pricing)", used);
         assertEq(uint8(curve.state().status), uint8(CurveStatus.Graduated));
@@ -112,7 +112,7 @@ abstract contract LiquidityMigratorForkTest is MonadForkTest {
         for (uint256 gasLimit = 200_000; gasLimit <= 1_000_000; gasLimit += 20_000) {
             uint256 snapshot = vm.snapshotState();
             vm.prank(whale);
-            (bool ok,) = address(curve).call{value: 5000 ether, gas: gasLimit}(
+            (bool ok,) = address(curve).call{value: Presets.TARGET_RAISE * 5 / 2, gas: gasLimit}(
                 abi.encodeCall(BondingCurveManager.buy, (0, address(0)))
             );
             if (ok && curve.state().status == CurveStatus.Completed) {

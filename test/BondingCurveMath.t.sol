@@ -54,7 +54,7 @@ contract BondingCurveMathTest is Test {
             realMon, Presets.EXPECTED_VM0, vTFinal, Presets.LP_SUPPLY, Presets.GRADUATION_FEE_BPS
         );
         assertEq(fee + monLP, realMon, "MON fully allocated");
-        assertApproxEqAbs(fee, 100 ether, 1, "5% of R");
+        assertApproxEqAbs(fee, Presets.TARGET_RAISE * 5 / 100, 1, "5% of R");
         assertLe(tokensLP, Presets.LP_SUPPLY);
         assertLt(Presets.LP_SUPPLY - tokensLP, 1e6, "only rounding dust of L is burned");
         // DEX opening price monLP / tokensLP >= curve final price vM_f / vT_f.

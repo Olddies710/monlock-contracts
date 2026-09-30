@@ -68,9 +68,9 @@ abstract contract MonadForkTest is Test {
         curve = BondingCurveManager(c);
         router = new V4TestRouter(poolManager);
 
-        vm.deal(alice, 100_000 ether);
-        vm.deal(bob, 100_000 ether);
-        vm.deal(whale, 100_000 ether);
+        vm.deal(alice, 50 * Presets.TARGET_RAISE);
+        vm.deal(bob, 50 * Presets.TARGET_RAISE);
+        vm.deal(whale, 50 * Presets.TARGET_RAISE);
     }
 
     /// @dev Production parameters; `owner` deploys and keeps ownership (no Safe handoff in the fixture).
@@ -101,9 +101,9 @@ abstract contract MonadForkTest is Test {
     function _graduate() internal returns (uint256 realMonAtCompletion) {
         _rollPastSnipeWindow();
         uint256 realMonBefore = curve.state().realMonReserve;
-        (, uint256 fee,, uint256 refund) = curve.quoteBuy(5000 ether);
+        (, uint256 fee,, uint256 refund) = curve.quoteBuy(Presets.TARGET_RAISE * 5 / 2);
         vm.prank(whale);
-        curve.buy{value: 5000 ether}(0, address(0));
-        realMonAtCompletion = realMonBefore + (5000 ether - refund) - fee;
+        curve.buy{value: Presets.TARGET_RAISE * 5 / 2}(0, address(0));
+        realMonAtCompletion = realMonBefore + (Presets.TARGET_RAISE * 5 / 2 - refund) - fee;
     }
 }

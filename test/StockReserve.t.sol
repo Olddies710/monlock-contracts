@@ -571,7 +571,7 @@ contract StockReserveTest is LaunchpadTest {
         (LaunchToken t, BondingCurveManager c, StockReserve reserve) = _launchStock("graduated", address(tsla));
         vm.roll(c.launchBlock() + Presets.SNIPE_DECAY_BLOCKS);
         vm.prank(alice);
-        c.buy{value: 5000 ether}(0, address(0));
+        c.buy{value: R * 5 / 2}(0, address(0));
         assertEq(uint8(c.state().status), uint8(CurveStatus.Graduated));
         vm.prank(creator);
         c.setCreatorFeeRecipient(address(reserve));

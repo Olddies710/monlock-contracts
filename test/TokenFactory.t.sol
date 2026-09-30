@@ -433,7 +433,7 @@ contract TokenFactoryTest is LaunchpadTest {
         // Sell-out and atomic graduation.
         uint256 bobBefore = bob.balance;
         vm.prank(bob);
-        launchedCurve.buy{value: 5000 ether}(0, bot);
+        launchedCurve.buy{value: R * 5 / 2}(0, bot);
         monIn += bobBefore - bob.balance;
         assertEq(uint8(launchedCurve.state().status), uint8(CurveStatus.Graduated));
         assertEq(migrator.lastCurve(), c);

@@ -134,6 +134,16 @@ contract Deploy is Script {
         } else {
             return; // tests: no files
         }
+        // A later run (configuration only) keeps the first run's block: indexers start from the deployment, not
+        // from the last reconfiguration.
+        string memory record = DeploymentLib.path(d.chainId);
+        if (vm.isFile(record)) {
+            Deployment memory previous = DeploymentLib.read(record);
+            if (previous.factory == d.factory && previous.migrator == d.migrator && previous.startBlock < d.startBlock)
+            {
+                d.startBlock = previous.startBlock;
+            }
+        }
         DeploymentLib.write(d, file);
         console.log("record: %s", file);
     }

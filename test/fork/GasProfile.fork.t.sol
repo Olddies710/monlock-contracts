@@ -123,7 +123,7 @@ abstract contract GasProfileForkTest is MonadForkTest {
         string memory group = network.name;
         _rollPastSnipeWindow();
         vm.prank(whale);
-        curve.buy{value: 5000 ether}(0, address(0));
+        curve.buy{value: Presets.TARGET_RAISE * 5 / 2}(0, address(0));
         vm.snapshotGasLastFrame(group, "buy_graduation");
         assertEq(uint8(curve.state().status), uint8(CurveStatus.Graduated));
 
@@ -144,7 +144,7 @@ abstract contract GasProfileForkTest is MonadForkTest {
             assertLe(gasLimit, 1_000_000, "no gas limit defers the migration");
             uint256 snapshot = vm.snapshotState();
             vm.prank(whale);
-            (bool ok,) = address(curve).call{value: 5000 ether, gas: gasLimit}(
+            (bool ok,) = address(curve).call{value: Presets.TARGET_RAISE * 5 / 2, gas: gasLimit}(
                 abi.encodeCall(BondingCurveManager.buy, (0, address(0)))
             );
             if (!ok || curve.state().status != CurveStatus.Completed) vm.revertToState(snapshot);

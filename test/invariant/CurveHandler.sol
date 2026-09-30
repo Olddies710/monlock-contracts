@@ -3,6 +3,8 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
+import {Presets} from "../../script/config/Presets.sol";
+
 import {BondingCurveManager} from "../../src/BondingCurveManager.sol";
 import {LaunchToken} from "../../src/LaunchToken.sol";
 import {CurveState, CurveStatus} from "../../src/types/LaunchpadTypes.sol";
@@ -11,6 +13,7 @@ import {MockMigrator} from "../utils/Mocks.sol";
 /// @notice Drives one launch through random trading, transfers, block progression, claims, migration failures
 ///         and graduation, while keeping ghost ledgers of every MON that enters or leaves the system.
 contract CurveHandler is Test {
+    uint256 internal constant R = Presets.TARGET_RAISE;
     BondingCurveManager public immutable curve;
     LaunchToken public immutable token;
     MockMigrator public immutable migrator;
@@ -53,7 +56,7 @@ contract CurveHandler is Test {
         if (_status() != CurveStatus.Trading) return;
         address actor = actors[actorSeed % actors.length];
         bool inWindow = curve.maxBuyAmount() != type(uint256).max;
-        amount = bound(amount, 1e12, inWindow ? 10 ether : 400 ether);
+        amount = bound(amount, 1e12, inWindow ? R / 200 : R / 5);
         (uint256 q,,,) = curve.quoteBuy(amount);
         if (q == 0 || q > curve.maxBuyAmount()) return;
         _executeBuy(actor, amount, referrers[refSeed % referrers.length]);
@@ -66,7 +69,7 @@ contract CurveHandler is Test {
         if (_status() != CurveStatus.Trading || buys + sells < 15) return;
         uint256 windowEnd = curve.launchBlock() + 200;
         if (vm.getBlockNumber() < windowEnd) vm.roll(windowEnd);
-        _executeBuy(actors[actorSeed % actors.length], bound(amount, 2100 ether, 5000 ether), address(0));
+        _executeBuy(actors[actorSeed % actors.length], bound(amount, R * 105 / 100, R * 5 / 2), address(0));
     }
 
     function sell(uint256 actorSeed, uint256 amount, uint256 refSeed) external {
