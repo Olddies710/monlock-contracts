@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Full broadcast rehearsal of DEPLOYMENT.md on a local anvil node that forks Monad testnet with Monad's execution
-# rules (`--network monad`): deploy, audit, Safe handoff, idempotent re-run and the smoke lifecycle, with real
-# blocks and receipts. Ends with the gas used and gas limit of every transaction.
+# Full broadcast rehearsal of DEPLOYMENT.md on a local anvil node that forks Monad testnet (default) or mainnet
+# with Monad's execution rules (`--network monad`): deploy, audit, Safe handoff, idempotent re-run and the smoke
+# lifecycle, with real blocks and receipts, against that network's real Uniswap v4 PoolManager. Ends with the gas
+# used and gas limit of every transaction.
 #
 #   MONAD_TESTNET_RPC_URL=https://testnet-rpc.monad.xyz ./script/rehearse.sh
+#   REHEARSE_NETWORK=mainnet MONAD_RPC_URL=https://rpc.monad.xyz ./script/rehearse.sh
 #
 # The node runs with chain id 31337, so nothing is ever recorded as a testnet deployment (deployments/31337.json and
 # broadcast/*/31337/ are gitignored). Accounts are fresh and impersonated: anvil's default keys are public, and on
@@ -11,15 +13,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-: "${MONAD_TESTNET_RPC_URL:?set MONAD_TESTNET_RPC_URL}"
+case "${REHEARSE_NETWORK:-testnet}" in
+  testnet)
+    FORK_URL="${MONAD_TESTNET_RPC_URL:?set MONAD_TESTNET_RPC_URL}"
+    FORK_POOL_MANAGER=0x451D64ab3b650040d2aE1886602b97ed6eDc643d
+    ;;
+  mainnet)
+    FORK_URL="${MONAD_RPC_URL:?set MONAD_RPC_URL}"
+    FORK_POOL_MANAGER=0x188d586Ddcf52439676Ca21A244753fA19F9Ea8e
+    ;;
+  *) echo "REHEARSE_NETWORK must be testnet or mainnet" >&2; exit 1 ;;
+esac
 PORT="${ANVIL_PORT:-8546}"
 RPC="http://127.0.0.1:${PORT}"
 GAS_MULTIPLIER="${GAS_MULTIPLIER:-110}" # Monad bills the gas limit: keep forge's headroom small (default is 130)
-TESTNET_POOL_MANAGER=0x451D64ab3b650040d2aE1886602b97ed6eDc643d
 
 step() { printf '\n==> %s\n' "$*"; }
 
-anvil --fork-url "$MONAD_TESTNET_RPC_URL" --network monad --chain-id 31337 --port "$PORT" --silent &
+anvil --fork-url "$FORK_URL" --network monad --chain-id 31337 --port "$PORT" --silent &
 ANVIL_PID=$!
 trap 'kill "$ANVIL_PID" 2>/dev/null || true' EXIT
 for _ in $(seq 1 60); do cast chain-id --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 0.5; done
@@ -36,7 +47,7 @@ done
 cast rpc anvil_setCode "$SAFE" 0x00 --rpc-url "$RPC" >/dev/null # stands in for a Safe (a contract)
 mine() { cast rpc anvil_mine "$(printf '0x%x' "$1")" --rpc-url "$RPC" >/dev/null; }
 
-export POOL_MANAGER="$TESTNET_POOL_MANAGER" PROTOCOL_TREASURY="$TREASURY" FINAL_OWNER="$SAFE"
+export POOL_MANAGER="$FORK_POOL_MANAGER" PROTOCOL_TREASURY="$TREASURY" FINAL_OWNER="$SAFE"
 BROADCAST=(--rpc-url "$RPC" --broadcast --slow --unlocked --sender "$DEPLOYER" --gas-estimate-multiplier "$GAS_MULTIPLIER")
 
 step "Deploy (simulation, then phase 1: contracts, phase 2: configuration)"
