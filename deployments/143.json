@@ -1,0 +1,18 @@
+{
+  "chainId": 143,
+  "create2Deployer": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+  "curveInitCodeHash": "0xadc7aedfcdd83bdfe95c77f91f46322a9818285d5b1b09d1370cdd3f4616d7c8",
+  "deployer": "0x5fbA0B354B5fdD7B4a8eB0dc497143f7efa09d83",
+  "factory": "0x3Ec6905A80A8E981159fF7EA1Ee48C60eD737920",
+  "factorySalt": "0x5f91dbe8dddeec034311535c1070dc94e3f509cf2a3f414109014fcf87dc8b4b",
+  "finalOwner": "0x360c402C747F6fa7878B04b115307D4dE8DF3BC7",
+  "initialTreasury": "0x360c402C747F6fa7878B04b115307D4dE8DF3BC7",
+  "lpFee": 10000,
+  "migrator": "0x5efaAe7CF64A22b62672eAb5A87A6fAe166AE000",
+  "migratorSalt": "0x000000000000000000000000000000000000000000000000000000000000272b",
+  "poolManager": "0x188d586Ddcf52439676Ca21A244753fA19F9Ea8e",
+  "smokePreset": false,
+  "startBlock": 109741113,
+  "tickSpacing": 200,
+  "tokenInitCodeHash": "0x35212c18dc62661491ab5b0ea6fdca2363efc9fa7c390e13eb8c924275580a94"
+}
