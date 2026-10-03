@@ -5,7 +5,7 @@ transaction. It trades on a bonding curve until it sells out, then its liquidity
 forever: no owner and no function can remove it.
 
 - **Live on Monad mainnet** since block 109,741,113 (1 Oct 2026): [monlock.xyz](https://monlock.xyz)
-- **X:** [@Monlockxyz](https://x.com/Monlockxyz)
+- **X:** [@Monlockxyz](https://x.com/Monlockxyz) · **Contact:** support@monlock.xyz
 
 The history of this repository is the history of the contracts, from the first commit (29 Sep 2026) to the mainnet
 deployment (1 Oct 2026). It was split out of MonLock's main repository, which also holds the web app, indexer and
@@ -109,7 +109,7 @@ runtime bytecode matches) rather than an "exact match" (which also compares the 
 There has been no external audit yet. Every core contract went through an internal review, with no finding that could
 lose funds. The tests also fuzz the curve's invariants and run the full lifecycle on forks of mainnet and testnet.
 
-Please report vulnerabilities privately by DM to [@Monlockxyz](https://x.com/Monlockxyz), not in public issues.
+Please report vulnerabilities privately to **security@monlock.xyz**, not in public issues. We reply within 72 hours.
 
 ## License
 
