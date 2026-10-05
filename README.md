@@ -113,11 +113,9 @@ Please report vulnerabilities privately to **security@monlock.xyz**, not in publ
 
 ## License
 
-Each file's SPDX header gives its license:
+[MIT](LICENSE), for the whole repository except the dependencies under `lib/`, which keep their own licenses.
 
-- **Core contracts:** `TokenFactory`, `LaunchToken`, `BondingCurveManager`, `LiquidityMigrator` and `StockReserve` are
-  under the Business Source License 1.1.
-- **Everything else:** interfaces, types and libraries are under MIT.
-
-The BUSL parameters (Licensor, Change Date, Change License) are not set yet. Until a `LICENSE` file sets them, the core
-contracts are published here for reading and verification only.
+The five core contracts (`TokenFactory`, `LaunchToken`, `BondingCurveManager`, `LiquidityMigrator` and
+`StockReserve`) still carry a `BUSL-1.1` SPDX header from before they were relicensed. The headers are left unchanged
+so the files stay identical to the source verified on MonadVision and Monadscan; [`LICENSE`](LICENSE) states that MIT
+applies to them as well.
