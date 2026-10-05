@@ -111,6 +111,12 @@ lose funds. The tests also fuzz the curve's invariants and run the full lifecycl
 
 Please report vulnerabilities privately to **security@monlock.xyz**, not in public issues. We reply within 72 hours.
 
+## Use of AI tools
+
+MonLock was built by a solo founder with Claude (Anthropic) as an AI coding assistant. Claude wrote and reviewed much
+of the code, tests and documentation, directed by the founder, who made the product decisions and deploys and operates
+the contracts.
+
 ## License
 
 [MIT](LICENSE), for the whole repository except the dependencies under `lib/`, which keep their own licenses.
