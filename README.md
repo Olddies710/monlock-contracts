@@ -5,6 +5,7 @@ transaction. It trades on a bonding curve until it sells out, then its liquidity
 forever: no owner and no function can remove it.
 
 - **Live on Monad mainnet** since block 109,741,113 (1 Oct 2026): [monlock.xyz](https://monlock.xyz)
+- **Whitepaper:** [WHITEPAPER.md](WHITEPAPER.md): how it works, what the owner can and can't do, no token, one builder
 - **X:** [@Monlockxyz](https://x.com/Monlockxyz) · **Telegram (announcements):** [t.me/monlockxyz](https://t.me/monlockxyz) · **Contact:** support@monlock.xyz
 
 The history of this repository is the history of the contracts, from the first commit (29 Sep 2026) to the mainnet
