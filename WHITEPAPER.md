@@ -1,6 +1,6 @@
 # MonLock: how it works
 
-*A token launchpad on Monad. Version 1.0, October 2026. Everything here can be checked on-chain or in the public
+*A token launchpad on Monad. Version 1.1, October 2026. Everything here can be checked on-chain or in the public
 contracts repository.*
 
 ## 1. What MonLock is, and what it is not
@@ -127,7 +127,9 @@ Both features are optional conveniences. Neither can access your funds.
   source chain.
 - **Sign in with email, Google, Apple, X or Discord** uses Reown's embedded wallets, or you can connect MetaMask,
   Trust Wallet or any WalletConnect wallet. With an embedded wallet, the keys are managed by Reown, not by MonLock.
-  Export or back them up as you would with any wallet.
+  **Current limitation:** Reown's embedded wallets do not support the Monad network for sending transactions yet.
+  They can receive MON, but buying, selling, launching and depositing from other chains are disabled for them in the
+  app until Reown adds Monad. To trade, use MetaMask, Coinbase Wallet or Trust Wallet.
 
 ## 9. Known limits and risks
 
@@ -139,7 +141,8 @@ Both features are optional conveniences. Neither can access your funds.
 - **Tokens are speculative.** Most tokens on a bonding curve lose value, and some go to zero. MonLock does not vet,
   rate or recommend any token. Creators control their token's name, image and links, which can be misleading.
 - **Locked liquidity does not mean a safe token.** It means the pool cannot be withdrawn. The price can still fall.
-- **Third-party dependencies.** Uniswap v4, Monad itself, Aurora and Reown can have problems of their own.
+- **Third-party dependencies.** Uniswap v4, Monad itself, Aurora and Reown can have problems of their own. For example,
+  Reown's email and social wallets cannot send transactions on Monad yet (section 8).
 - **Not financial advice.** Nothing here is an offer or a recommendation. Check your local rules before using the
   service.
 
