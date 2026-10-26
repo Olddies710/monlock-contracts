@@ -41,7 +41,10 @@ fee claim are under [`broadcast/SmokeLaunch.s.sol/10143`](broadcast/SmokeLaunch.
    with virtual reserves. It charges a 1 % fee on every trade: 30 % to the creator, 60 % to the protocol and 10 % to a
    referrer.
 3. **Anti-snipe.** For the first 200 blocks the fee starts at 50 % and decays to 1 %, and a single buy is capped at
-   1 % of supply. Selling to the curve in the same block you bought from it reverts, which stops sandwiches.
+   1 % of supply. Selling to the curve in the same block you bought from it reverts, which stops sandwiches on
+   buyers. It does not protect sellers: someone holding tokens from an earlier block can sell first and buy back
+   after you in the same block, so a sale is protected only by its own minimum-output limit (`minMonOut`), which
+   wallets and apps should keep tight.
 4. **Graduation.** When the curve has raised 500,000 MON, at a 2.375M MON market cap, it graduates in the same
    transaction as the buy that sold it out. If that migration fails, for example because the buy ran short of gas,
    the buy still goes through and anyone can finish the migration later with `graduate()`. A 5 % graduation fee is

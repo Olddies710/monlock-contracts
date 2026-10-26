@@ -74,6 +74,12 @@ private mempool:
 These rules reduce sniping, they do not make it impossible. A bot that accepts the fee can still buy, and the fee it
 pays goes to the curve.
 
+**What they do not cover.** The same-block rule protects buyers. Someone who already holds tokens from an earlier block
+can sell first and buy back after another seller in the same block. A sale is protected only by the minimum-output
+limit set on it (`minMonOut`, 3 % by default in the app), so keep it tight. The 1 % cap applies to each purchase, not
+to each wallet: splitting a buy across several transactions or addresses is possible, but each one pays the decaying
+fee.
+
 ## 5. Graduation and locked liquidity
 
 When the curve has raised its target, the transaction that fills it also graduates the token:
